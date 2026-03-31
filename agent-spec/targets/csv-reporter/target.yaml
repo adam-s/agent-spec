@@ -1,0 +1,8 @@
+name: csv-reporter
+source: ../../csv-reporter
+verify: verify.sh
+delete_before_run:
+  - report.py
+agent:
+  model: claude-sonnet-4-6
+  budget: 2.00

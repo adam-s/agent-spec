@@ -1,0 +1,10 @@
+name: sqlite-window-queries
+source: ../../sqlite-window-queries
+verify: verify.sh
+delete_before_run:
+  - queries.js
+setup:
+  - npm install --silent
+agent:
+  model: claude-sonnet-4-6
+  budget: 2.00
