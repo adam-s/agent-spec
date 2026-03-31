@@ -31,12 +31,14 @@ VERIFY=""
 KEEP=false
 DELETE_FILES=""
 SETUP_CMDS=""
+INJECT_FROM=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --budget) BUDGET="$2"; shift 2 ;;
     --model) MODEL="$2"; shift 2 ;;
     --verify) VERIFY="$2"; shift 2 ;;
+    --inject) INJECT_FROM="$2"; shift 2 ;;
     --keep) KEEP=true; shift ;;
     --delete) DELETE_FILES="$2"; shift 2 ;;
     --setup) SETUP_CMDS="$2"; shift 2 ;;
@@ -44,12 +46,22 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Generate run ID
+# Generate run ID and allocate port
 export AGENT_SPEC_RUN_ID
 AGENT_SPEC_RUN_ID=$(uuidgen | tr '[:upper:]' '[:lower:]' | head -c 8)
 RUN_DIR="/tmp/agent-spec/${AGENT_SPEC_RUN_ID}"
 RESULTS_DIR="$PROJECT_DIR/results/$AGENT_SPEC_RUN_ID"
 mkdir -p "$RUN_DIR" "$RESULTS_DIR"
+
+# Allocate unique port from reserved range (3100-3110)
+export PORT
+PORT=3100
+for p in $(seq 3100 3110); do
+  if ! lsof -ti:"$p" >/dev/null 2>&1; then
+    PORT=$p
+    break
+  fi
+done
 
 TARGET_NAME=$(basename "$SOURCE")
 CONFIG_NAME=$(basename "$CONFIG")
@@ -59,6 +71,7 @@ echo "  Target: $TARGET_NAME"
 echo "  Config: $CONFIG_NAME"
 echo "  Model:  $MODEL"
 echo "  Budget: \$$BUDGET"
+echo "  Port:   $PORT"
 echo "  Log:    $RUN_DIR/events.jsonl"
 echo ""
 
@@ -74,6 +87,12 @@ if [[ -n "$DELETE_FILES" ]]; then
   for f in "${DEL_LIST[@]}"; do
     rm -f "$SANDBOX/$f" && echo "  Deleted: $f (agent must produce this)"
   done
+fi
+
+# 4. Inject files from target's inject/ directory (cordyceps — AFTER delete)
+if [[ -n "$INJECT_FROM" ]] && [[ -d "$INJECT_FROM" ]]; then
+  echo "  Injecting files from $INJECT_FROM"
+  cp -a "$INJECT_FROM"/* "$SANDBOX/" 2>/dev/null || true
 fi
 
 # 4. Run setup commands in sandbox
@@ -101,8 +120,10 @@ SIDECAR_PID=$!
 
 # 8. Log start
 PROMPT=$(cat "$PROMPT_FILE")
+# Substitute __PORT__ in prompt with allocated port
+PROMPT="${PROMPT//__PORT__/$PORT}"
 apc_log "INFO" "agent_started" "Agent invoked" \
-  "{\"target\":\"$TARGET_NAME\",\"config\":\"$CONFIG_NAME\",\"model\":\"$MODEL\",\"budget\":$BUDGET}"
+  "{\"target\":\"$TARGET_NAME\",\"config\":\"$CONFIG_NAME\",\"model\":\"$MODEL\",\"budget\":$BUDGET,\"port\":$PORT}"
 
 # 9. Run claude agent (from inside the sandbox for CWD isolation)
 START_S=$(date +%s)
@@ -146,7 +167,7 @@ if [[ -n "$VERIFY" ]] && [[ -f "$VERIFY" ]]; then
   cp "$VERIFY" "$SANDBOX/verify.sh"
   cp "$SCRIPT_DIR/lib.sh" "$SANDBOX/_apc_lib.sh" 2>/dev/null || true
   set +e
-  SCORE_OUTPUT=$(cd "$SANDBOX" && AGENT_SPEC_RUN_ID="$AGENT_SPEC_RUN_ID" bash verify.sh 2>&1)
+  SCORE_OUTPUT=$(cd "$SANDBOX" && AGENT_SPEC_RUN_ID="$AGENT_SPEC_RUN_ID" PORT="$PORT" bash verify.sh 2>&1)
   VERIFY_EXIT=$?
   set -e
   echo "$SCORE_OUTPUT"

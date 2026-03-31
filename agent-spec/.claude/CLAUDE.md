@@ -24,6 +24,21 @@ A deterministic evaluation harness for Claude Code agents. This project copies e
 
 Sandboxes live in `/tmp/claude/agent-spec-{uuid}/` (not local `tmp/`) so tested agents cannot see the harness. Create `/tmp/claude/` before running evals (Claude Code sandbox bug #36759).
 
+## Port Management
+
+When running multiple targets in parallel:
+
+- **invoke.sh allocates unique ports** from the 3100–3110 range (one per run)
+- **__PORT__ substitution** in prompts: `port 3100` → `port 3101` (per allocation)
+- **PORT environment variable** passed to verify.sh and test.js (via `process.env.PORT`)
+- **Port collision prevention**: Each parallel run gets a unique port; clear-ports.sh sweeps reserved ranges before/after
+
+When adding a new target that needs a port:
+1. Use `__PORT__` in prompt.md instead of hardcoding 3100
+2. Update verify.sh to accept PORT from environment: `PORT="${PORT:-3100}"`
+3. Update test.js to read PORT: `const PORT = process.env.PORT || 3100`
+4. invoke.sh handles the rest automatically
+
 ## Reference
 
 See @.claude/reference/claude-directory-reference.md for .claude/ directory best practices.

@@ -1,4 +1,4 @@
-const PORT = 3100;
+const PORT = process.env.PORT || 3100;
 const BASE = `http://localhost:${PORT}`;
 let passed = 0;
 let failed = 0;
