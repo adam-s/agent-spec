@@ -47,6 +47,8 @@ Do NOT launch agents until the user answers.
 
 ## The Loop
 
+Use the existing tools at each step — do not reimplement.
+
 ```
 depth = 0
 
@@ -58,40 +60,53 @@ RECURSE:
      bash scripts/sandbox/clear-ports.sh
 
   2. PREPARE STIMULI (if any)
-     Capture screenshots, copy data files, etc. to /tmp/agent-spec-stimuli/
-     These get injected into sandboxes — one per instance or shared.
+     bash scripts/tuning/capture-wireframe.sh <url> <output.png>
+     These get injected via --stimuli-dir.
 
   3. LAUNCH
-     bash scripts/tuning/parallel-invoke.sh <target> <config> [options]
-     Collect run IDs.
+     bash scripts/tuning/parallel-invoke.sh <target> <config> \
+       --instances N [--stimuli-dir <path>] [--keep]
+     Collect run IDs from stdout.
+
+     For A/B testing configs within iteration:
+       --configs baseline,tuned
+
+     For model comparison within iteration:
+       --models haiku,sonnet
 
   4. MONITOR (every 60s)
-     For each run_id, read events.jsonl or dashboard.
-     | Instance | Run ID | Status | Notes |
-     Stop early if agent is in a known-dead pattern.
+     bash scripts/cli/dashboard.sh <run_id> --summary
+     Build a monitoring table. Stop early if agent is stuck.
 
-  5. SCORE (deterministic)
-     For each run_id, extract the RESULT line from verify output.
-     pass_count = count of RESULT: PASS
-     fail_count = count of RESULT: FAIL
+  5. SCORE
+     bash scripts/reporting/score.sh <run_id>
+     python3 scripts/reporting/report.py <run_id1> <run_id2> ... --group-by config
 
-  6. STOP CONDITION CHECK
-     if pass_count == instances:
-       RETURN with summary: "Converged at depth {depth}. All instances pass."
+     For two-run comparison:
+       python3 scripts/reporting/report.py --compare <id1> <id2>
 
-  7. DIAGNOSE
+  6. REGRESSION CHECK
+     bash scripts/reporting/check-regression.sh <run_id>
+     If first iteration, save baseline:
+       bash scripts/reporting/save-baseline.sh <run_id>
+
+  7. STOP CONDITION CHECK
+     if all instances PASS and no regressions:
+       RETURN with summary: "Converged at depth {depth}."
+
+  8. DIAGNOSE
      For each failing instance, read produced code and events.
      For EVERY finding, classify:
        "Level 0 fix (trainer): ___" or "Level 2 fix (trainee): ___"
      If uncertain, ask the human.
 
-  8. APPLY FIXES
-     Level 2 → target's .claude/ (on trainee branch)
-     Level 0 → agent-spec (on main, selective)
+  9. APPLY FIXES
+     Level 2 → target's .claude/
+     Level 0 → agent-spec (selective)
      After each fix, consistency-check all .claude/ files at that level.
 
-  9. depth += 1
-     GOTO RECURSE
+  10. depth += 1
+      GOTO RECURSE
 ```
 
 ## Fix Classification
@@ -107,14 +122,6 @@ Two heuristics:
 Every Level 2 fix must work for ANY stimulus, not just the one that failed. If a fix only helps for one specific input, it is overfitting.
 
 Every Level 0 fix must work for ANY target. If it only helps one project, it belongs in target config.
-
-## Branch Discipline
-
-- Level 0 fixes → **main**
-- Level 2 fixes → **trainee's feature branch**
-- New scripts, configs, stimuli → **iterate feature branch**
-
-Verify you are on the correct branch before each commit.
 
 ## Handoff
 
