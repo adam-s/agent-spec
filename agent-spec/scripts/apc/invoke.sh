@@ -8,9 +8,12 @@
 #   --model <name>     Model name (default: claude-sonnet-4-6)
 #   --verify <script>  Verification script to run after agent completes
 #   --keep             Don't remove sandbox after completion
+#   --delete <files>   Comma-separated files to delete before agent runs
+#   --setup <cmds>     Semicolon-separated commands to run in sandbox before agent
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 SANDBOX_DIR="$SCRIPT_DIR/../sandbox"
 MONITOR_DIR="$SCRIPT_DIR/../monitor"
 INJECT_DIR="$SCRIPT_DIR/../inject"
@@ -26,6 +29,8 @@ BUDGET="2.00"
 MODEL="claude-sonnet-4-6"
 VERIFY=""
 KEEP=false
+DELETE_FILES=""
+SETUP_CMDS=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -34,16 +39,17 @@ while [[ $# -gt 0 ]]; do
     --verify) VERIFY="$2"; shift 2 ;;
     --keep) KEEP=true; shift ;;
     --delete) DELETE_FILES="$2"; shift 2 ;;
+    --setup) SETUP_CMDS="$2"; shift 2 ;;
     *) echo "Unknown option: $1" >&2; exit 1 ;;
   esac
 done
-DELETE_FILES="${DELETE_FILES:-}"
 
 # Generate run ID
 export AGENT_SPEC_RUN_ID
 AGENT_SPEC_RUN_ID=$(uuidgen | tr '[:upper:]' '[:lower:]' | head -c 8)
 RUN_DIR="/tmp/agent-spec/${AGENT_SPEC_RUN_ID}"
-mkdir -p "$RUN_DIR"
+RESULTS_DIR="$PROJECT_DIR/results/$AGENT_SPEC_RUN_ID"
+mkdir -p "$RUN_DIR" "$RESULTS_DIR"
 
 TARGET_NAME=$(basename "$SOURCE")
 CONFIG_NAME=$(basename "$CONFIG")
@@ -56,10 +62,13 @@ echo "  Budget: \$$BUDGET"
 echo "  Log:    $RUN_DIR/events.jsonl"
 echo ""
 
-# 1. Copy repo into sandbox
+# 1. Clear ports used by previous runs
+bash "$SCRIPT_DIR/../sandbox/clear-ports.sh" 2>/dev/null || true
+
+# 2. Copy repo into sandbox
 SANDBOX=$(bash "$SANDBOX_DIR/copy-repo.sh" "$SOURCE" "$AGENT_SPEC_RUN_ID")
 
-# 2. Delete files the agent must produce (from --delete flag, comma-separated)
+# 3. Delete files the agent must produce (comma-separated)
 if [[ -n "$DELETE_FILES" ]]; then
   IFS=',' read -ra DEL_LIST <<< "$DELETE_FILES"
   for f in "${DEL_LIST[@]}"; do
@@ -67,23 +76,35 @@ if [[ -n "$DELETE_FILES" ]]; then
   done
 fi
 
-# 3. Swap .claude/ with test config
+# 4. Run setup commands in sandbox
+if [[ -n "$SETUP_CMDS" ]]; then
+  echo "  Running setup..."
+  IFS=';' read -ra CMDS <<< "$SETUP_CMDS"
+  for cmd in "${CMDS[@]}"; do
+    cmd=$(echo "$cmd" | xargs)  # trim whitespace
+    [[ -z "$cmd" ]] && continue
+    echo "    $ $cmd"
+    (cd "$SANDBOX" && eval "$cmd") || echo "    WARNING: setup command failed: $cmd"
+  done
+fi
+
+# 5. Swap .claude/ with test config
 bash "$SANDBOX_DIR/swap-claude-dir.sh" "$SANDBOX" "$CONFIG"
 
-# 4. Inject emitter libraries
+# 6. Inject emitter libraries
 cp "$INJECT_DIR/_apc.py" "$SANDBOX/" 2>/dev/null || true
 cp "$INJECT_DIR/_apc.ts" "$SANDBOX/" 2>/dev/null || true
 
-# 4. Start resource monitor sidecar
+# 7. Start resource monitor sidecar
 bash "$MONITOR_DIR/sidecar.sh" 30 &
 SIDECAR_PID=$!
 
-# 5. Log start
+# 8. Log start
 PROMPT=$(cat "$PROMPT_FILE")
 apc_log "INFO" "agent_started" "Agent invoked" \
   "{\"target\":\"$TARGET_NAME\",\"config\":\"$CONFIG_NAME\",\"model\":\"$MODEL\",\"budget\":$BUDGET}"
 
-# 6. Run claude agent (from inside the sandbox for CWD isolation)
+# 9. Run claude agent (from inside the sandbox for CWD isolation)
 START_S=$(date +%s)
 
 set +e
@@ -100,7 +121,7 @@ set -e
 END_S=$(date +%s)
 DURATION_MS=$(( (END_S - START_S) * 1000 ))
 
-# 7. Log completion
+# 10. Log completion
 if [[ $EXIT_CODE -eq 0 ]]; then
   apc_log "INFO" "agent_complete" "Agent finished successfully" \
     "{\"exit_code\":$EXIT_CODE,\"duration_ms\":$DURATION_MS}"
@@ -110,23 +131,36 @@ else
     "{\"exit_code\":$EXIT_CODE,\"duration_ms\":$DURATION_MS,\"stderr_tail\":\"$STDERR_TAIL\"}"
 fi
 
-# 8. Parse token metrics
+# 11. Parse token metrics
 if [[ -f "$RUN_DIR/output.json" ]] && [[ -s "$RUN_DIR/output.json" ]]; then
   TOKENS=$(bash "$SCRIPT_DIR/parse-output.sh" "$RUN_DIR/output.json" 2>/dev/null || echo '{}')
   apc_log "METRIC" "token_update" "Token usage" "$TOKENS"
   echo "  Tokens: $TOKENS"
 fi
 
-# 9. Run verification
+# 12. Run verification
 if [[ -n "$VERIFY" ]] && [[ -f "$VERIFY" ]]; then
   echo ""
   echo "=== Verification ==="
+  # Inject APC lib into verify context
   cp "$VERIFY" "$SANDBOX/verify.sh"
+  cp "$SCRIPT_DIR/lib.sh" "$SANDBOX/_apc_lib.sh" 2>/dev/null || true
   set +e
-  SCORE_OUTPUT=$(cd "$SANDBOX" && bash verify.sh 2>&1)
+  SCORE_OUTPUT=$(cd "$SANDBOX" && AGENT_SPEC_RUN_ID="$AGENT_SPEC_RUN_ID" bash verify.sh 2>&1)
   VERIFY_EXIT=$?
   set -e
   echo "$SCORE_OUTPUT"
+
+  # Parse test results from output and emit events
+  while IFS= read -r line; do
+    if [[ "$line" == *"PASS:"* ]]; then
+      TEST_NAME=$(echo "$line" | sed 's/.*PASS: //')
+      apc_log "INFO" "test_passed" "Test passed" "{\"test_name\":\"$TEST_NAME\"}"
+    elif [[ "$line" == *"FAIL:"* ]] && [[ "$line" != *"RESULT:"* ]]; then
+      TEST_NAME=$(echo "$line" | sed 's/.*FAIL: //')
+      apc_log "ERROR" "test_failed" "Test failed" "{\"test_name\":\"$TEST_NAME\"}"
+    fi
+  done <<< "$SCORE_OUTPUT"
 
   if echo "$SCORE_OUTPUT" | grep -q "RESULT: PASS"; then
     apc_log "INFO" "score" "Verification passed" '{"result":"PASS"}'
@@ -135,19 +169,33 @@ if [[ -n "$VERIFY" ]] && [[ -f "$VERIFY" ]]; then
   fi
 fi
 
-# 10. Stop sidecar
+# 13. Save produced code to results
+echo ""
+echo "=== Archiving ==="
+for f in $(cd "$SANDBOX" && find . -maxdepth 2 -name '*.py' -o -name '*.js' -o -name '*.ts' 2>/dev/null | grep -v node_modules | grep -v '_apc'); do
+  mkdir -p "$RESULTS_DIR/produced/$(dirname "$f")"
+  cp "$SANDBOX/$f" "$RESULTS_DIR/produced/$f" 2>/dev/null && echo "  Saved: $f"
+done
+
+# 14. Persist events and output to results/
+cp "$RUN_DIR/events.jsonl" "$RESULTS_DIR/" 2>/dev/null || true
+cp "$RUN_DIR/output.json" "$RESULTS_DIR/" 2>/dev/null || true
+cp "$RUN_DIR/stderr.log" "$RESULTS_DIR/" 2>/dev/null || true
+echo "  Results: $RESULTS_DIR/"
+
+# 15. Stop sidecar
 kill "$SIDECAR_PID" 2>/dev/null || true
 wait "$SIDECAR_PID" 2>/dev/null || true
 
-# 11. Summary
+# 16. Clear ports after run
+bash "$SCRIPT_DIR/../sandbox/clear-ports.sh" 2>/dev/null || true
+
+# 17. Summary
 echo ""
 echo "=== Run $AGENT_SPEC_RUN_ID complete ==="
-echo "  Events: $RUN_DIR/events.jsonl"
-echo "  Output: $RUN_DIR/output.json"
-echo "  Sandbox: $SANDBOX"
+bash "$SCRIPT_DIR/../cli/dashboard.sh" "$AGENT_SPEC_RUN_ID" --summary 2>/dev/null || true
 
-# 12. Cleanup sandbox (unless --keep)
+# 18. Cleanup sandbox (unless --keep)
 if [[ "$KEEP" = false ]]; then
   rm -rf "$SANDBOX"
-  echo "  Sandbox removed."
 fi

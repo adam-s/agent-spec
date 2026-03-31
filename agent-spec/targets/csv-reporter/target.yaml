@@ -1,5 +1,5 @@
 name: csv-reporter
-source: ../../csv-reporter
+source: ../../../csv-reporter
 verify: verify.sh
 delete_before_run:
   - report.py

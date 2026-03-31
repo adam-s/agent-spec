@@ -22,6 +22,21 @@ Each target is a directory in `targets/` with:
 9. Copy verify.sh into sandbox, run it, capture RESULT
 10. Stop sidecar, clean up sandbox
 
+## Cordyceps Injection
+
+The harness can override or inject code into any project it tests. Like the cordyceps fungus that takes over its host, agent-spec can:
+
+- **Delete files** (`delete_before_run`) — Remove source files so the agent must produce them from scratch
+- **Inject emitters** (`_apc.py`, `_apc.ts`) — Add telemetry the original project doesn't have
+- **Swap `.claude/`** — Replace the project's instructions entirely
+- **Inject verify scripts** — Add scoring logic the project knows nothing about
+- **Inject setup scripts** — Run arbitrary commands before the agent starts
+- **Modify source** — Any file in the sandbox can be altered, added, or replaced before the agent sees it
+
+The original project is never modified. Only the disposable sandbox copy is affected. This means any project can become a test target without changing a single line of its own code.
+
+To add custom injections, put files in `targets/<name>/inject/` and add copy commands to the target's `setup` field.
+
 ## Scoring Contract
 
 verify.sh must:

@@ -53,7 +53,14 @@ FORMAT='
   (if .level == "ERROR" then "\u001b[31m" elif .level == "WARN" then "\u001b[33m" elif .level == "METRIC" then "\u001b[36m" else "\u001b[32m" end) +
   "[\(.level)]\u001b[0m " +
   "\u001b[1m\(.event)\u001b[0m — \(.msg)" +
-  (if (.data | length) > 0 then " \u001b[90m\(.data | tostring)\u001b[0m" else "" end)
+  (if .event == "token_update" then " \u001b[90m[\(.data.input)in/\(.data.output)out $\(.data.cost_usd)]\u001b[0m"
+   elif .event == "resource_snapshot" then " \u001b[90m[CPU \(.data.cpu)% Mem \(.data.mem)%]\u001b[0m"
+   elif .event == "score" then " \u001b[90m[\(.data.result)]\u001b[0m"
+   elif .event == "test_passed" then " \u001b[90m[\(.data.test_name)]\u001b[0m"
+   elif .event == "test_failed" then " \u001b[90m[\(.data.test_name): \(.data.details // "")]\u001b[0m"
+   elif .event == "agent_complete" then " \u001b[90m[\(.data.duration_ms / 1000)s]\u001b[0m"
+   elif (.data | length) > 0 then " \u001b[90m\(.data | tostring)\u001b[0m"
+   else "" end)
 '
 
 if [[ "$SUMMARY" = true ]]; then

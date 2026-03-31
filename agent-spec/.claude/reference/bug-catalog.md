@@ -73,3 +73,39 @@ Bugs discovered during harness iterations. Each entry documents a class of probl
 **General principle:** Glob commands that may match zero files must have `|| true` or `2>/dev/null` to handle the empty case.
 
 **Authoritative rule:** Always guard glob-based ls/find with `|| echo "0"` or similar fallback.
+
+---
+
+## B07: Token-efficient instructions cost more tokens
+
+**Story:** A 6-line CLAUDE.md with rules like "no preamble, no closing fluff, prefer simple code" caused haiku to use 4,582 tokens on csv-reporter, vs 1,723 for the 1-line baseline ("A coding project."). The instructions added input token overhead on every turn without reducing output.
+
+**Impact:** 2.7x more expensive. 2.4x longer duration. Same pass rate (both PASS).
+
+**General principle:** Instruction overhead compounds per turn. Short, declarative instructions add context to every API call. On simple tasks where the agent gets it right on the first try, any instruction beyond the minimum is pure cost.
+
+**Authoritative rule:** Always measure. Never assume instructions save tokens — test with baseline and compare. Instructions are an optimization for complex tasks where first-attempt failure is common, not for simple one-shot tasks.
+
+---
+
+## B08: run-eval.sh YAML parser f-string escaping
+
+**Story:** The Python YAML parser was embedded in a bash `eval "$(python3 -c "...")"` block. Python f-strings with `{` characters were interpreted as bash parameter expansion, producing syntax errors.
+
+**Impact:** run-eval.sh was completely broken on first attempt.
+
+**General principle:** Never embed Python with f-strings or regex inside bash `eval "$(python3 -c "...")"`. The `{` and `}` characters conflict between Python and bash.
+
+**Authoritative rule:** Use heredoc with single-quoted delimiter (`<< 'PYEOF'`) for inline Python in bash. Pass variables via environment, not string interpolation.
+
+---
+
+## B09: Uninitialized bash arrays under set -u
+
+**Story:** `EXTRA_FLAGS=()` was declared but never populated. `"${EXTRA_FLAGS[@]}"` under `set -u` (treat unset variables as errors) throws "unbound variable" because bash treats an empty array as unset.
+
+**Impact:** run-eval.sh crashed when no extra flags were passed (the common case).
+
+**General principle:** Empty bash arrays are "unbound" under `set -u`. Guard with `${#array[@]} -gt 0` before expansion.
+
+**Authoritative rule:** Pattern: `if [[ ${#ARRAY[@]} -gt 0 ]]; then cmd "${ARRAY[@]}"; fi`

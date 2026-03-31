@@ -1,5 +1,5 @@
 name: sqlite-window-queries
-source: ../../sqlite-window-queries
+source: ../../../sqlite-window-queries
 verify: verify.sh
 delete_before_run:
   - queries.js
