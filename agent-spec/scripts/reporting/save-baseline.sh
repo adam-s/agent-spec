@@ -19,6 +19,11 @@ if [[ ! -f "$EVENTS" ]]; then
   exit 1
 fi
 
+if [[ ! -s "$EVENTS" ]]; then
+  echo "Events file is empty for run $RUN_ID" >&2
+  exit 1
+fi
+
 # Extract metrics using Python
 BASELINE=$(EVENTS_PATH="$EVENTS" RUN_ID="$RUN_ID" python3 << 'PYEOF'
 import json, os

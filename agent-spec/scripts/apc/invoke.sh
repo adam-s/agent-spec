@@ -23,6 +23,16 @@ source "$SCRIPT_DIR/lib.sh"
 SOURCE="${1:?Usage: invoke.sh <source_repo> <config_dir> <prompt_file>}"
 CONFIG="${2:?Usage: invoke.sh <source_repo> <config_dir> <prompt_file>}"
 PROMPT_FILE="${3:?Usage: invoke.sh <source_repo> <config_dir> <prompt_file>}"
+
+# Validate inputs
+if [[ ! -d "$SOURCE" ]]; then
+  echo "Source repo not found: $SOURCE" >&2
+  exit 1
+fi
+if [[ ! -f "$PROMPT_FILE" ]]; then
+  echo "Prompt file not found: $PROMPT_FILE" >&2
+  exit 1
+fi
 shift 3
 
 BUDGET="2.00"
@@ -86,6 +96,17 @@ bash "$SCRIPT_DIR/../sandbox/clear-ports.sh" 2>/dev/null || true
 
 # 2. Copy repo into sandbox
 SANDBOX=$(bash "$SANDBOX_DIR/copy-repo.sh" "$SOURCE" "$AGENT_SPEC_RUN_ID")
+
+# Cleanup trap: stop sidecar and remove sandbox on any exit
+SIDECAR_PID=""
+cleanup() {
+  [[ -n "$SIDECAR_PID" ]] && kill "$SIDECAR_PID" 2>/dev/null || true
+  bash "$SCRIPT_DIR/../sandbox/clear-ports.sh" 2>/dev/null || true
+  if [[ "$KEEP" = false ]] && [[ -n "${SANDBOX:-}" ]]; then
+    rm -rf "$SANDBOX"
+  fi
+}
+trap cleanup EXIT
 
 # 3. Delete files the agent must produce (comma-separated)
 if [[ -n "$DELETE_FILES" ]]; then
@@ -210,19 +231,7 @@ cp "$RUN_DIR/output.json" "$RESULTS_DIR/" 2>/dev/null || true
 cp "$RUN_DIR/stderr.log" "$RESULTS_DIR/" 2>/dev/null || true
 echo "  Results: $RESULTS_DIR/"
 
-# 15. Stop sidecar
-kill "$SIDECAR_PID" 2>/dev/null || true
-wait "$SIDECAR_PID" 2>/dev/null || true
-
-# 16. Clear ports after run
-bash "$SCRIPT_DIR/../sandbox/clear-ports.sh" 2>/dev/null || true
-
-# 17. Summary
+# 15. Summary (sidecar stop, port cleanup, and sandbox removal handled by EXIT trap)
 echo ""
 echo "=== Run $AGENT_SPEC_RUN_ID complete ==="
 bash "$SCRIPT_DIR/../cli/dashboard.sh" "$AGENT_SPEC_RUN_ID" --summary 2>/dev/null || true
-
-# 18. Cleanup sandbox (unless --keep)
-if [[ "$KEEP" = false ]]; then
-  rm -rf "$SANDBOX"
-fi
