@@ -2,15 +2,13 @@
 
 ## The Trainer of Trainers
 
-**The `.claude/` directory and CLAUDE.md are the product.** Every iteration improves the instructions, rules, skills, and utilities. The code exists to test the instructions. The instructions are what ship.
+agent-spec is a development tool for `.claude/` directories. It takes any project, launches parallel agents in disposable sandboxes, observes what the agents get right and wrong, and uses that signal to improve the project's `.claude/` — its CLAUDE.md, rules, skills, agents, or reference docs. The iteration loop (`/iterate`) is the core workflow: run agents → score → diagnose → fix instructions → rerun until agents pass autonomously.
 
-This applies recursively. agent-spec trains other projects' `.claude/` directories — the product of that training can itself be a skill that guides autonomous agent behavior. This creates nested levels: the trainer (Level 0) iterates on instructions (Level 2) by observing sub-agents (Level 1) that follow those instructions in disposable sandboxes.
+The target repositories (hono-websocket-counter, csv-reporter, sqlite-window-queries) are test fixtures — they exist to exercise the harness, not as deliverables. The product is agent-spec itself: its skills, scripts, rules, and the ability to sit down with any project and iteratively develop its `.claude/` until autonomous agents succeed without human intervention.
 
-See @.claude/reference/recursive-training.md for the full architecture, guards, and fix classification rules.
+This applies recursively. The `.claude/` that agent-spec develops for a target project can itself contain skills that guide autonomous behavior. See @.claude/reference/recursive-training.md for the Level 0/1/2 architecture and guards.
 
 **MANDATORY**: We do not use the word "kill" in user-facing output, comments, or documentation, even though the underlying CLI command may be `kill`. Use descriptive terms like "stop", "halt", "terminate", or "shut down" instead.
-
-A deterministic evaluation harness for Claude Code agents. This project copies entire repositories into isolated sandboxes, swaps their `.claude/` configurations, runs prompts via sub-agents, and measures tokens, cost, and correctness.
 
 ## How to Operate
 
