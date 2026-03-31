@@ -130,8 +130,14 @@ for i in $(seq 1 "$TOTAL"); do
     INJECT_ARGS=(--inject "$INSTANCE_INJECT")
   fi
 
-  # Pre-assign port to avoid race condition (3100 + instance index)
+  # Pre-assign port (3100 + instance - 1). Max 11 parallel (3100-3110).
   INSTANCE_PORT=$((3099 + i))
+  if [[ $INSTANCE_PORT -gt 3110 ]]; then
+    echo "  ERROR: Port pool exhausted (max 11 parallel instances, got $TOTAL)" >&2
+    # Stop already-launched instances
+    for pid in "${PIDS[@]}"; do kill "$pid" 2>/dev/null || true; done
+    exit 1
+  fi
 
   # Describe the variant
   DESC="$V_CONFIG"
