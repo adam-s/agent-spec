@@ -17,7 +17,7 @@ jq '{
   output:       (.modelUsage | to_entries[0].value.outputTokens // 0),
   cache_create: (.modelUsage | to_entries[0].value.cacheCreationInputTokens // 0),
   cache_read:   (.modelUsage | to_entries[0].value.cacheReadInputTokens // 0),
-  cost_usd:     (.modelUsage | to_entries[0].value.costUSD // 0),
-  turns:        (.numTurns // 0),
-  duration_ms:  (.durationMs // 0)
+  cost_usd:     ((.modelUsage | to_entries[0].value.costUSD // 0) * 1000 | round / 1000),
+  turns:        (.num_turns // .numTurns // 0),
+  duration_ms:  (.duration_ms // .durationMs // 0)
 }' "$JSON_FILE"

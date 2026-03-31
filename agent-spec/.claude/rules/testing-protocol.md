@@ -32,3 +32,18 @@ verify.sh must:
 ## Cleanup
 
 Always run `/stop` if a run fails mid-execution. The SubagentStop hook handles automatic cleanup when agents terminate.
+
+## Bug Catalog
+
+When a new class of bug is discovered during iterations, document it in `.claude/reference/bug-catalog.md` using this format:
+
+```
+## BNN: Short name
+
+**Story:** What happened (the specific incident)
+**Impact:** What broke and how badly
+**General principle:** The generalized lesson (not specific to one target)
+**Authoritative rule:** The concrete rule to follow going forward
+```
+
+This catalog is the institutional memory of the harness. Every iteration that discovers a new failure mode should add an entry.

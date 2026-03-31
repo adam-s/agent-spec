@@ -33,9 +33,11 @@ while [[ $# -gt 0 ]]; do
     --model) MODEL="$2"; shift 2 ;;
     --verify) VERIFY="$2"; shift 2 ;;
     --keep) KEEP=true; shift ;;
+    --delete) DELETE_FILES="$2"; shift 2 ;;
     *) echo "Unknown option: $1" >&2; exit 1 ;;
   esac
 done
+DELETE_FILES="${DELETE_FILES:-}"
 
 # Generate run ID
 export AGENT_SPEC_RUN_ID
@@ -57,10 +59,18 @@ echo ""
 # 1. Copy repo into sandbox
 SANDBOX=$(bash "$SANDBOX_DIR/copy-repo.sh" "$SOURCE" "$AGENT_SPEC_RUN_ID")
 
-# 2. Swap .claude/ with test config
+# 2. Delete files the agent must produce (from --delete flag, comma-separated)
+if [[ -n "$DELETE_FILES" ]]; then
+  IFS=',' read -ra DEL_LIST <<< "$DELETE_FILES"
+  for f in "${DEL_LIST[@]}"; do
+    rm -f "$SANDBOX/$f" && echo "  Deleted: $f (agent must produce this)"
+  done
+fi
+
+# 3. Swap .claude/ with test config
 bash "$SANDBOX_DIR/swap-claude-dir.sh" "$SANDBOX" "$CONFIG"
 
-# 3. Inject emitter libraries
+# 4. Inject emitter libraries
 cp "$INJECT_DIR/_apc.py" "$SANDBOX/" 2>/dev/null || true
 cp "$INJECT_DIR/_apc.ts" "$SANDBOX/" 2>/dev/null || true
 
@@ -74,7 +84,7 @@ apc_log "INFO" "agent_started" "Agent invoked" \
   "{\"target\":\"$TARGET_NAME\",\"config\":\"$CONFIG_NAME\",\"model\":\"$MODEL\",\"budget\":$BUDGET}"
 
 # 6. Run claude agent (from inside the sandbox for CWD isolation)
-START_MS=$(date +%s%3N 2>/dev/null || echo 0)
+START_S=$(date +%s)
 
 set +e
 (cd "$SANDBOX" && claude -p "$PROMPT" \
@@ -87,8 +97,8 @@ set +e
 EXIT_CODE=$?
 set -e
 
-END_MS=$(date +%s%3N 2>/dev/null || echo 0)
-DURATION_MS=$((END_MS - START_MS))
+END_S=$(date +%s)
+DURATION_MS=$(( (END_S - START_S) * 1000 ))
 
 # 7. Log completion
 if [[ $EXIT_CODE -eq 0 ]]; then
@@ -127,6 +137,7 @@ fi
 
 # 10. Stop sidecar
 kill "$SIDECAR_PID" 2>/dev/null || true
+wait "$SIDECAR_PID" 2>/dev/null || true
 
 # 11. Summary
 echo ""
