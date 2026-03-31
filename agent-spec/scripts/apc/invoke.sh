@@ -91,7 +91,7 @@ SANDBOX=$(bash "$SANDBOX_DIR/copy-repo.sh" "$SOURCE" "$AGENT_SPEC_RUN_ID")
 if [[ -n "$DELETE_FILES" ]]; then
   IFS=',' read -ra DEL_LIST <<< "$DELETE_FILES"
   for f in "${DEL_LIST[@]}"; do
-    rm -f "$SANDBOX/$f" && echo "  Deleted: $f (agent must produce this)"
+    rm -rf "$SANDBOX/$f" && echo "  Deleted: $f (agent must produce this)"
   done
 fi
 
