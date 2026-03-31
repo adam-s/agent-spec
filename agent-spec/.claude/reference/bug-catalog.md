@@ -121,3 +121,27 @@ Bugs discovered during harness iterations. Each entry documents a class of probl
 **General principle:** Non-atomic port allocation races when multiple processes scan simultaneously. The scanner sees the port as free, but by the time the process binds it, another process already has it.
 
 **Authoritative rule:** For parallel runs, pre-assign ports sequentially in the launcher (3100, 3101, 3102...) and pass via `--port`. Never let parallel processes independently scan for free ports.
+
+---
+
+## B11: Corrupt baseline JSON causes Python traceback
+
+**Story:** `check-regression.sh` calls `json.load()` on the baseline file without exception handling. A corrupt or manually edited baseline file produces a full Python traceback instead of a user-friendly error.
+
+**Impact:** User sees a traceback and assumes the tool is broken, not that the file is corrupt.
+
+**General principle:** Any script that reads user-editable or externally-produced files must handle parse errors gracefully. Never expose raw language tracebacks to users.
+
+**Authoritative rule:** Wrap all `json.load()` calls on external files in try/except. Print a clear error message naming the file and the parse error.
+
+---
+
+## B12: Report group-by uses unknown values as baseline
+
+**Story:** `report.py --group-by config` sorts groups alphabetically and uses the first as baseline for delta calculations. Runs with missing config data show as "?" which sorts before "baseline", making the unknown group the reference point for all deltas.
+
+**Impact:** Delta columns show meaningless comparisons against incomplete data instead of against the actual baseline config.
+
+**General principle:** When computing deltas, filter out unknown or incomplete data before selecting the reference group. The baseline should be a semantically meaningful group, not whatever sorts first.
+
+**Authoritative rule:** In grouped reports, skip groups named "?" when selecting the baseline. Fall back to the first named group.

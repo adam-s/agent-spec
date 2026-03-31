@@ -53,7 +53,11 @@ if not os.path.exists(baseline_path):
     print(f"NO BASELINE for {target}/{config} — run save-baseline.sh first")
     sys.exit(0)
 
-baseline = json.load(open(baseline_path))
+try:
+    baseline = json.load(open(baseline_path))
+except (json.JSONDecodeError, ValueError) as e:
+    print(f"CORRUPT BASELINE at {baseline_path}: {e}")
+    sys.exit(1)
 
 regressions = []
 

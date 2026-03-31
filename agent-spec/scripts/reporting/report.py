@@ -106,8 +106,9 @@ def print_group_by(runs, key):
             "avg_tokens": avg_tokens, "avg_cost": avg_cost, "avg_dur": avg_dur,
         })
 
-    # First group is the baseline for deltas
-    baseline = summaries[0] if summaries else None
+    # First non-unknown group is the baseline for deltas
+    valid = [s for s in summaries if s["name"] != "?"]
+    baseline = valid[0] if valid else (summaries[0] if summaries else None)
 
     for s in summaries:
         dur_s = f"{s['avg_dur'] / 1000:.0f}s"
