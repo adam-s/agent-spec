@@ -12,12 +12,12 @@ if [[ ! -f "$LOG" ]]; then
   exit 1
 fi
 
-# Test events
-PASSED=$(jq -r 'select(.event=="test_passed") | .data.test_name' "$LOG" 2>/dev/null | wc -l | tr -d ' ')
-FAILED=$(jq -r 'select(.event=="test_failed") | .data.test_name' "$LOG" 2>/dev/null | wc -l | tr -d ' ')
+# Test events (grep valid JSON lines first to tolerate malformed entries)
+PASSED=$(grep -c '"test_passed"' "$LOG" 2>/dev/null || echo 0)
+FAILED=$(grep -c '"test_failed"' "$LOG" 2>/dev/null || echo 0)
 
 # Overall score
-RESULT=$(jq -r 'select(.event=="score") | .data.result' "$LOG" 2>/dev/null | tail -1)
+RESULT=$(grep '"score"' "$LOG" 2>/dev/null | jq -r '.data.result' 2>/dev/null | tail -1)
 
 echo "Tests passed: $PASSED"
 echo "Tests failed: $FAILED"

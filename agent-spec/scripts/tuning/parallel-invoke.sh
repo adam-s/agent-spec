@@ -103,7 +103,7 @@ fi
 # Launch all variants
 PIDS=()
 RUN_IDS=()
-MANIFEST="/tmp/agent-spec-parallel-$(date +%s).txt"
+MANIFEST="/tmp/agent-spec-parallel-$(date +%s)-$$.txt"
 : > "$MANIFEST"
 
 echo "Launching $TOTAL parallel instance(s) of $TARGET_NAME" >&2
