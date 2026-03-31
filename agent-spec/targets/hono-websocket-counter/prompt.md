@@ -1,4 +1,4 @@
-Write server.ts — a Hono app on Bun (port 3100) that:
+Write server.ts — a Hono app on Bun (port __PORT__) that:
 
 1. Serves an HTML page at GET / with a counter display and +/- buttons
 2. Accepts WebSocket connections at /ws

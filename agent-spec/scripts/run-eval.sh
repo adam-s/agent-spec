@@ -103,6 +103,8 @@ while [[ $# -gt 0 ]]; do
     --model) MODEL="$2"; shift 2 ;;
     --budget) BUDGET="$2"; shift 2 ;;
     --keep) EXTRA_FLAGS+=(--keep); shift ;;
+    --inject) EXTRA_FLAGS+=(--inject "$2"); shift 2 ;;
+    --port) EXTRA_FLAGS+=(--port "$2"); shift 2 ;;
     *) echo "Unknown option: $1" >&2; exit 1 ;;
   esac
 done

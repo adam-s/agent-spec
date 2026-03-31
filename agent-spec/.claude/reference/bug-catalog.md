@@ -109,3 +109,15 @@ Bugs discovered during harness iterations. Each entry documents a class of probl
 **General principle:** Empty bash arrays are "unbound" under `set -u`. Guard with `${#array[@]} -gt 0` before expansion.
 
 **Authoritative rule:** Pattern: `if [[ ${#ARRAY[@]} -gt 0 ]]; then cmd "${ARRAY[@]}"; fi`
+
+---
+
+## B10: Port allocation race in parallel runs
+
+**Story:** `parallel-invoke.sh` launched 3 invoke.sh instances simultaneously. Each scanned ports 3100-3110 with `lsof` and all 3 saw 3100 as free before any agent bound it. All 3 agents got port 3100, causing collisions.
+
+**Impact:** Port collisions caused test failures (instance 3 FAIL) despite correct agent code. False negative — the agent wrote correct code but verification ran against the wrong server.
+
+**General principle:** Non-atomic port allocation races when multiple processes scan simultaneously. The scanner sees the port as free, but by the time the process binds it, another process already has it.
+
+**Authoritative rule:** For parallel runs, pre-assign ports sequentially in the launcher (3100, 3101, 3102...) and pass via `--port`. Never let parallel processes independently scan for free ports.

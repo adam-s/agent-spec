@@ -42,6 +42,7 @@ while [[ $# -gt 0 ]]; do
     --keep) KEEP=true; shift ;;
     --delete) DELETE_FILES="$2"; shift 2 ;;
     --setup) SETUP_CMDS="$2"; shift 2 ;;
+    --port) PORT_OVERRIDE="$2"; shift 2 ;;
     *) echo "Unknown option: $1" >&2; exit 1 ;;
   esac
 done
@@ -54,14 +55,19 @@ RESULTS_DIR="$PROJECT_DIR/results/$AGENT_SPEC_RUN_ID"
 mkdir -p "$RUN_DIR" "$RESULTS_DIR"
 
 # Allocate unique port from reserved range (3100-3110)
+# If --port was given, use that directly (parallel-invoke pre-assigns ports)
 export PORT
-PORT=3100
-for p in $(seq 3100 3110); do
-  if ! lsof -ti:"$p" >/dev/null 2>&1; then
-    PORT=$p
-    break
-  fi
-done
+if [[ -n "${PORT_OVERRIDE:-}" ]]; then
+  PORT="$PORT_OVERRIDE"
+else
+  PORT=3100
+  for p in $(seq 3100 3110); do
+    if ! lsof -ti:"$p" >/dev/null 2>&1; then
+      PORT=$p
+      break
+    fi
+  done
+fi
 
 TARGET_NAME=$(basename "$SOURCE")
 CONFIG_NAME=$(basename "$CONFIG")

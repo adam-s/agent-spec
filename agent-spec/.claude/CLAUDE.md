@@ -1,45 +1,35 @@
 # agent-spec
 
+## The Trainer of Trainers
+
 **The `.claude/` directory and CLAUDE.md are the product.** Every iteration improves the instructions, rules, skills, and utilities. The code exists to test the instructions. The instructions are what ship.
+
+This applies recursively. agent-spec trains other projects' `.claude/` directories — the product of that training can itself be a skill that guides autonomous agent behavior. This creates nested levels: the trainer (Level 0) iterates on instructions (Level 2) by observing sub-agents (Level 1) that follow those instructions in disposable sandboxes.
+
+See @.claude/reference/recursive-training.md for the full architecture, guards, and fix classification rules.
 
 **MANDATORY**: We do not use the word "kill" in user-facing output, comments, or documentation, even though the underlying CLI command may be `kill`. Use descriptive terms like "stop", "halt", "terminate", or "shut down" instead.
 
 A deterministic evaluation harness for Claude Code agents. This project copies entire repositories into isolated sandboxes, swaps their `.claude/` configurations, runs prompts via sub-agents, and measures tokens, cost, and correctness.
 
-## What this project does
+## How to Operate
 
-- Copies target repos into `/tmp/claude/agent-spec-{uuid}/` for isolation
-- Swaps `.claude/` directories to A/B test different instruction sets
-- Invokes `claude -p` with structured JSON output capture (APC)
-- Monitors token burn, system resources, and task completion
-- Scores results with per-target verification scripts
-- Reports comparisons across configs for the same target
+Use existing skills and scripts — do not reimplement what already exists. See @.claude/rules/operational-workflow.md for the full tool inventory, workflow patterns, and when to use each.
 
-## What this project does NOT do
+Key skills: `/run-eval`, `/iterate`, `/report`, `/stop`, `/new-target`
 
-- It does not contain the applications being tested — those live in sibling directories or external repos
-- It does not modify the target repos — sandboxes are disposable copies
+## Key Concepts
 
-## Sandboxes
-
-Sandboxes live in `/tmp/claude/agent-spec-{uuid}/` (not local `tmp/`) so tested agents cannot see the harness. Create `/tmp/claude/` before running evals (Claude Code sandbox bug #36759).
-
-## Port Management
-
-When running multiple targets in parallel:
-
-- **invoke.sh allocates unique ports** from the 3100–3110 range (one per run)
-- **__PORT__ substitution** in prompts: `port 3100` → `port 3101` (per allocation)
-- **PORT environment variable** passed to verify.sh and test.js (via `process.env.PORT`)
-- **Port collision prevention**: Each parallel run gets a unique port; clear-ports.sh sweeps reserved ranges before/after
-
-When adding a new target that needs a port:
-1. Use `__PORT__` in prompt.md instead of hardcoding 3100
-2. Update verify.sh to accept PORT from environment: `PORT="${PORT:-3100}"`
-3. Update test.js to read PORT: `const PORT = process.env.PORT || 3100`
-4. invoke.sh handles the rest automatically
+- **Sandboxes** live in `/tmp/claude/agent-spec-{uuid}/` — disposable copies, originals never modified
+- **Ports** 3100-3110 allocated per run; use `__PORT__` in prompt.md, `--port N` for parallel pre-assignment
+- **Cordyceps** — delete, inject, or swap any file in sandbox before the agent sees it
 
 ## Reference
 
-See @.claude/reference/claude-directory-reference.md for .claude/ directory best practices.
-See @.claude/reference/bug-catalog.md for known bug classes discovered during iterations.
+- @.claude/rules/operational-workflow.md — tools, scripts, and workflow patterns
+- @.claude/rules/port-management.md — port ranges, PID registry, verify.sh patterns
+- @.claude/rules/testing-protocol.md — sandbox lifecycle, cordyceps, scoring contract
+- @.claude/rules/log-protocol.md — JSONL event format, reading and emitting events
+- @.claude/reference/recursive-training.md — Level 0/1/2 architecture and guards
+- @.claude/reference/bug-catalog.md — known failure classes from past iterations
+- @.claude/reference/claude-directory-reference.md — .claude/ directory best practices
