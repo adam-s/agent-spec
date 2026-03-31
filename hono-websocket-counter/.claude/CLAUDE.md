@@ -9,6 +9,7 @@ Build web applications with Hono framework on Bun runtime.
 - **ALWAYS** read test.js FIRST before writing server.ts — understand what tests expect
 - **ALWAYS** read any JSON data files to understand the data structure
 - **ALWAYS** read the prompt FIRST to find the port number — parse it from the task description
+- If a `wireframe.png` exists in the project root, read it and match its visual style
 
 ## Implementation
 
@@ -17,3 +18,7 @@ Build web applications with Hono framework on Bun runtime.
 - Embed data from JSON files directly in the served page
 - Use Bun.serve() with a fetch handler that upgrades WebSocket at /ws if needed
 - Run the tests after writing code: bun test.js
+
+## Skills
+
+See @.claude/skills/build/SKILL.md for the full test-driven development process.
