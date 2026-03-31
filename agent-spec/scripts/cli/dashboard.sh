@@ -61,12 +61,29 @@ if [[ "$SUMMARY" = true ]]; then
   echo "── agent-spec ─── run: $RUN_ID ──"
   echo ""
 
-  # Status
+  # Target/Config
+  TARGET=$(jq -r 'select(.event=="agent_started") | .data.target // "?"' "$LOG" 2>/dev/null | tail -1)
+  CONFIG=$(jq -r 'select(.event=="agent_started") | .data.config // "?"' "$LOG" 2>/dev/null | tail -1)
+  if [[ -n "$TARGET" ]]; then
+    echo "  Target: $TARGET / $CONFIG"
+  fi
+
+  # Status + Duration
   LAST_EVENT=$(tail -1 "$LOG" | jq -r '.event' 2>/dev/null || echo "unknown")
+  DUR_MS=$(jq -r 'select(.event=="agent_complete" or .event=="agent_error") | .data.duration_ms // 0' "$LOG" 2>/dev/null | tail -1)
+  DUR_HUMAN=""
+  if [[ -n "$DUR_MS" ]] && [[ "$DUR_MS" -gt 0 ]] 2>/dev/null; then
+    DUR_S=$((DUR_MS / 1000))
+    if [[ $DUR_S -ge 60 ]]; then
+      DUR_HUMAN=" (${DUR_S}s / $((DUR_S / 60))m $((DUR_S % 60))s)"
+    else
+      DUR_HUMAN=" (${DUR_S}s)"
+    fi
+  fi
   if [[ "$LAST_EVENT" == "agent_complete" ]] || [[ "$LAST_EVENT" == "score" ]]; then
-    echo "  Status: COMPLETE"
+    echo "  Status: COMPLETE$DUR_HUMAN"
   elif [[ "$LAST_EVENT" == "agent_error" ]]; then
-    echo "  Status: ERROR"
+    echo "  Status: ERROR$DUR_HUMAN"
   else
     echo "  Status: $LAST_EVENT"
   fi
@@ -77,8 +94,16 @@ if [[ "$SUMMARY" = true ]]; then
     echo "  Tokens: $TOKENS"
   fi
 
+  # Tests
+  T_PASS=$(jq -c 'select(.event=="test_passed")' "$LOG" 2>/dev/null | wc -l | tr -d ' ')
+  T_FAIL=$(jq -c 'select(.event=="test_failed")' "$LOG" 2>/dev/null | wc -l | tr -d ' ')
+  T_TOTAL=$((T_PASS + T_FAIL))
+  if [[ $T_TOTAL -gt 0 ]]; then
+    echo "  Tests:  $T_PASS passed / $T_FAIL failed ($T_TOTAL total)"
+  fi
+
   # Score
-  SCORE=$(jq -r "select(.event==\"score\") | .data.result" "$LOG" 2>/dev/null | tail -1)
+  SCORE=$(jq -r 'select(.event=="score") | .data.result' "$LOG" 2>/dev/null | tail -1)
   if [[ -n "$SCORE" ]]; then
     echo "  Result: $SCORE"
   fi

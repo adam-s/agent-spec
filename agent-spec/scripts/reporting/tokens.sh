@@ -20,5 +20,5 @@ jq -r 'select(.event=="token_update") | .data |
   "Total:        \((.input // 0) + (.output // 0))",
   "Cost:         $\(.cost_usd // 0)",
   "Turns:        \(.turns // 0)",
-  "Duration:     \(.duration_ms // 0)ms"
+  "Duration:     \((.duration_ms // 0) / 1000 | floor)s (\((.duration_ms // 0) / 1000 / 60 | floor)m \((.duration_ms // 0) / 1000 % 60 | floor)s)"
 ' "$LOG" | tail -8

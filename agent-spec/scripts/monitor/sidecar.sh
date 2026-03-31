@@ -2,7 +2,7 @@
 # sidecar.sh — Background resource monitor that writes snapshots to APC.
 #
 # Usage: scripts/monitor/sidecar.sh [interval_seconds]
-# Runs until killed. Start with & and track the PID.
+# Runs until stopped. Start with & and track the PID.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"

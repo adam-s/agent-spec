@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SubagentStop hook — kill processes tracked by agent-spec.
+# SubagentStop hook — stop processes tracked by agent-spec.
 set -euo pipefail
 
 PID_FILE="/tmp/agent-spec-pids.txt"

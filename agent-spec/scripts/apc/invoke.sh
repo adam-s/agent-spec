@@ -73,15 +73,15 @@ PROMPT=$(cat "$PROMPT_FILE")
 apc_log "INFO" "agent_started" "Agent invoked" \
   "{\"target\":\"$TARGET_NAME\",\"config\":\"$CONFIG_NAME\",\"model\":\"$MODEL\",\"budget\":$BUDGET}"
 
-# 6. Run claude agent
+# 6. Run claude agent (from inside the sandbox for CWD isolation)
 START_MS=$(date +%s%3N 2>/dev/null || echo 0)
 
 set +e
-claude -p "$PROMPT" \
+(cd "$SANDBOX" && claude -p "$PROMPT" \
   --output-format json \
   --dangerously-skip-permissions \
   --max-budget-usd "$BUDGET" \
-  --model "$MODEL" \
+  --model "$MODEL") \
   > "$RUN_DIR/output.json" \
   2> "$RUN_DIR/stderr.log"
 EXIT_CODE=$?
@@ -125,7 +125,7 @@ if [[ -n "$VERIFY" ]] && [[ -f "$VERIFY" ]]; then
   fi
 fi
 
-# 10. Kill sidecar
+# 10. Stop sidecar
 kill "$SIDECAR_PID" 2>/dev/null || true
 
 # 11. Summary
