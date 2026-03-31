@@ -155,8 +155,9 @@ apc_log "INFO" "agent_started" "Agent invoked" \
 # 9. Run claude agent (from inside the sandbox for CWD isolation)
 START_S=$(date +%s)
 
+TIMEOUT="${TIMEOUT:-600}"  # 10 minute default, override with TIMEOUT env var
 set +e
-(cd "$SANDBOX" && claude -p "$PROMPT" \
+(cd "$SANDBOX" && timeout "$TIMEOUT" claude -p "$PROMPT" \
   --output-format json \
   --dangerously-skip-permissions \
   --max-budget-usd "$BUDGET" \
@@ -165,6 +166,10 @@ set +e
   2> "$RUN_DIR/stderr.log"
 EXIT_CODE=$?
 set -e
+
+if [[ $EXIT_CODE -eq 124 ]]; then
+  apc_log "ERROR" "agent_timeout" "Agent timed out after ${TIMEOUT}s" '{}'
+fi
 
 END_S=$(date +%s)
 DURATION_MS=$(( (END_S - START_S) * 1000 ))

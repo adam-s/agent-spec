@@ -179,6 +179,9 @@ for i in $(seq 1 "$TOTAL"); do
     echo "$RUN_ID" >> "$MANIFEST"
     RESULT=$(grep -o 'RESULT: [A-Z]*' "$LOG" 2>/dev/null | tail -1 || echo "RESULT: UNKNOWN")
     echo "  Instance $i: run=$RUN_ID exit=$EXIT $RESULT" >&2
+    if [[ "$RESULT" != *"PASS"* ]]; then
+      FAILURES=$((FAILURES + 1))
+    fi
   else
     echo "  Instance $i: exit=$EXIT (no run_id found)" >&2
     FAILURES=$((FAILURES + 1))
