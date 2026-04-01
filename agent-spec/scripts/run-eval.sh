@@ -93,6 +93,11 @@ SOURCE_PATH="$(cd "$TARGET_DIR" && cd "$YAML_SOURCE" 2>/dev/null && pwd)" || {
   exit 1
 }
 
+# Lint: warn if prompt.md has hardcoded port numbers instead of __PORT__
+if grep -qE '\b3[01][0-9]{2}\b' "$TARGET_DIR/prompt.md" 2>/dev/null; then
+  echo "WARNING: prompt.md contains hardcoded port number — use __PORT__ instead" >&2
+fi
+
 # CLI overrides
 MODEL="$YAML_MODEL"
 BUDGET="$YAML_BUDGET"
