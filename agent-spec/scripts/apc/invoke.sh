@@ -117,9 +117,13 @@ if [[ -n "$DELETE_FILES" ]]; then
 fi
 
 # 4. Inject files from target's inject/ directory (cordyceps — AFTER delete)
-if [[ -n "$INJECT_FROM" ]] && [[ -d "$INJECT_FROM" ]]; then
-  echo "  Injecting files from $INJECT_FROM"
-  cp -a "$INJECT_FROM"/* "$SANDBOX/" 2>/dev/null || true
+if [[ -n "$INJECT_FROM" ]]; then
+  if [[ -d "$INJECT_FROM" ]]; then
+    echo "  Injecting files from $INJECT_FROM"
+    cp -a "$INJECT_FROM"/* "$SANDBOX/" 2>/dev/null || true
+  else
+    echo "  WARNING: Inject directory not found: $INJECT_FROM" >&2
+  fi
 fi
 
 # 4. Run setup commands in sandbox
@@ -153,7 +157,7 @@ apc_log "INFO" "agent_started" "Agent invoked" \
   "{\"target\":\"$TARGET_NAME\",\"config\":\"$CONFIG_NAME\",\"model\":\"$MODEL\",\"budget\":$BUDGET,\"port\":$PORT}"
 
 # 9. Run claude agent (from inside the sandbox for CWD isolation)
-START_S=$(date +%s)
+START_MS=$(python3 -c "import time; print(int(time.time()*1000))")
 
 TIMEOUT="${TIMEOUT:-600}"  # 10 minute default, override with TIMEOUT env var
 set +e
@@ -171,8 +175,8 @@ if [[ $EXIT_CODE -eq 124 ]]; then
   apc_log "ERROR" "agent_timeout" "Agent timed out after ${TIMEOUT}s" '{}'
 fi
 
-END_S=$(date +%s)
-DURATION_MS=$(( (END_S - START_S) * 1000 ))
+END_MS=$(python3 -c "import time; print(int(time.time()*1000))")
+DURATION_MS=$(( END_MS - START_MS ))
 
 # 10. Log completion
 if [[ $EXIT_CODE -eq 0 ]]; then
@@ -217,18 +221,21 @@ if [[ -n "$VERIFY" ]] && [[ -f "$VERIFY" ]]; then
 
   if echo "$SCORE_OUTPUT" | grep -q "RESULT: PASS"; then
     apc_log "INFO" "score" "Verification passed" '{"result":"PASS"}'
-  else
+  elif echo "$SCORE_OUTPUT" | grep -q "RESULT: FAIL"; then
     apc_log "ERROR" "score" "Verification failed" '{"result":"FAIL"}'
+  else
+    apc_log "WARN" "score" "No RESULT line in verify output" '{"result":"N/A"}'
   fi
 fi
 
 # 13. Save produced code to results
 echo ""
 echo "=== Archiving ==="
-for f in $(cd "$SANDBOX" && find . -maxdepth 2 -name '*.py' -o -name '*.js' -o -name '*.ts' 2>/dev/null | grep -v node_modules | grep -v '_apc'); do
+while IFS= read -r f; do
+  [[ -z "$f" ]] && continue
   mkdir -p "$RESULTS_DIR/produced/$(dirname "$f")"
   cp "$SANDBOX/$f" "$RESULTS_DIR/produced/$f" 2>/dev/null && echo "  Saved: $f"
-done
+done < <(cd "$SANDBOX" && find . -maxdepth 2 \( -name '*.py' -o -name '*.js' -o -name '*.ts' \) 2>/dev/null | grep -v node_modules | grep -v '_apc')
 
 # 14. Persist events and output to results/
 cp "$RUN_DIR/events.jsonl" "$RESULTS_DIR/" 2>/dev/null || true

@@ -21,7 +21,7 @@ if [[ -d "$SANDBOX" ]]; then
   exit 1
 fi
 
-cp -a "$SOURCE" "$SANDBOX"
+cp -aL "$SOURCE" "$SANDBOX" 2>/dev/null || cp -a "$SOURCE" "$SANDBOX"
 
 apc_log "INFO" "sandbox_created" "Copied repo to sandbox" \
   "{\"source\":\"$SOURCE\",\"sandbox\":\"$SANDBOX\"}"
