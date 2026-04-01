@@ -9,6 +9,7 @@ Usage:
   report.py --all --group-by model         Group by model with deltas
   report.py --all --group-by target        Group by target with deltas
   report.py --compare <id1> <id2>          Side-by-side two-run diff
+  report.py --session <session_id>         Iterate session report grouped by depth
 """
 
 import json
@@ -195,6 +196,67 @@ def print_resource_summary(runs):
     print(f"  Min Disk:  {min(disks)} GB free")
 
 
+def find_session_runs(session_id: str) -> dict[int, list[str]]:
+    """Find all run_ids belonging to a session, grouped by iteration depth."""
+    depth_runs: dict[int, list[str]] = {}
+    if not BASE.exists():
+        return depth_runs
+    for run_dir in BASE.iterdir():
+        events_file = run_dir / "events.jsonl"
+        if not events_file.exists():
+            continue
+        for line in events_file.read_text().splitlines():
+            try:
+                e = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if e.get("event") == "iteration_started" and e.get("data", {}).get("session_id", "").startswith(session_id):
+                depth = e["data"].get("depth", 0)
+                events = []
+                for l2 in events_file.read_text().splitlines():
+                    try:
+                        events.append(json.loads(l2))
+                    except json.JSONDecodeError:
+                        continue
+                for e2 in events:
+                    if e2.get("event") == "instance_complete":
+                        child_id = e2["data"].get("run_id")
+                        if child_id:
+                            depth_runs.setdefault(depth, []).append(child_id)
+                break
+    return depth_runs
+
+
+def print_session_report(session_id: str):
+    """Print iterate session report grouped by depth."""
+    depth_runs = find_session_runs(session_id)
+    if not depth_runs:
+        print(f"No runs found for session {session_id}", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"# Iterate Session: {session_id}\n")
+
+    for depth in sorted(depth_runs.keys()):
+        run_ids = depth_runs[depth]
+        runs = [r for r in (load_run(rid) for rid in run_ids) if r]
+        if not runs:
+            continue
+        print(f"\n## Depth {depth} ({len(runs)} instances)\n")
+        print_table(runs)
+
+    # Overall summary
+    all_ids = [rid for ids in depth_runs.values() for rid in ids]
+    all_runs = [r for r in (load_run(rid) for rid in all_ids) if r]
+    if all_runs:
+        total_cost = sum(get_metrics(r)["cost"] for r in all_runs)
+        total_passes = sum(1 for r in all_runs if r.get("result") == "PASS")
+        print(f"\n## Session Summary\n")
+        print(f"  Depths: {len(depth_runs)}")
+        print(f"  Total runs: {len(all_runs)}")
+        print(f"  Total passes: {total_passes}/{len(all_runs)}")
+        print(f"  Total cost: ${total_cost:.3f}")
+
+
 def main():
     if len(sys.argv) < 2:
         print("Usage: report.py <run_id> ... | --all | --latest | --compare <id1> <id2> | --all --group-by <field>",
@@ -203,6 +265,7 @@ def main():
 
     group_by = None
     compare_ids = None
+    session_id = None
     run_ids = []
     latest = False
 
@@ -222,9 +285,16 @@ def main():
         elif arg == "--compare":
             compare_ids = (sys.argv[i + 1], sys.argv[i + 2])
             i += 2
+        elif arg == "--session":
+            i += 1
+            session_id = sys.argv[i] if i < len(sys.argv) else None
         else:
             run_ids.append(arg)
         i += 1
+
+    if session_id:
+        print_session_report(session_id)
+        return
 
     if compare_ids:
         a = load_run(compare_ids[0])

@@ -5,9 +5,14 @@ Usage:
   python3 scripts/dashboard.py <run_id>              # Live tail
   python3 scripts/dashboard.py --latest              # Most recent run
   python3 scripts/dashboard.py <run_id> --summary    # One-shot summary
+  python3 scripts/dashboard.py <run_id> --stream     # Compact one-line-per-event (no color)
+  python3 scripts/dashboard.py --diff <id1> <id2>    # Config diff between two runs
+  python3 scripts/dashboard.py --parallel <id>       # Multi-instance status table
 """
 import json
 import os
+import re
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -27,41 +32,91 @@ CYAN = "\033[36m"
 LEVEL_COLORS = {"ERROR": RED, "WARN": YELLOW, "METRIC": CYAN, "INFO": GREEN, "DEBUG": DIM}
 
 
+# ── Event detail formatters ──────────────────────────────────────
+# Each returns a short string summarizing the event's data.
+# The dispatch table keeps format_event clean and extensible.
+
+def _fmt_token_update(d):
+    return f"{d.get('input', 0)}in/{d.get('output', 0)}out ${d.get('cost_usd', 0)}"
+
+def _fmt_resource_snapshot(d):
+    return f"CPU {d.get('cpu', 0)}% Mem {d.get('mem', 0)}%"
+
+def _fmt_score(d):
+    return d.get("result", "?")
+
+def _fmt_agent_complete(d):
+    return f"{d.get('duration_ms', 0)/1000:.1f}s"
+
+def _fmt_test_result(d):
+    return d.get("test_name", "")
+
+def _fmt_verification_output(d):
+    return f"exit={d.get('exit_code', '?')}, {len(d.get('output', ''))} chars"
+
+def _fmt_instance_complete(d):
+    return f"#{d.get('instance', '?')} run={d.get('run_id', '?')} {d.get('result', '?')}"
+
+def _fmt_instance_failed(d):
+    return f"#{d.get('instance', '?')} run={d.get('run_id', '?')} exit={d.get('exit_code', '?')}"
+
+def _fmt_parallel_complete(d):
+    return f"{d.get('passed', 0)}/{d.get('total', 0)} passed, {d.get('duration_ms', 0)//1000}s"
+
+def _fmt_parallel_started(d):
+    return f"{d.get('total', '?')} instances"
+
+def _fmt_iteration_started(d):
+    return f"depth {d.get('depth', '?')}/{d.get('max_depth', '?')} session={d.get('session_id', '?')[:8]}"
+
+def _fmt_iteration_diagnosed(d):
+    return f"depth {d.get('depth', '?')} — {d.get('findings_count', 0)} findings"
+
+def _fmt_iteration_fixed(d):
+    return f"depth {d.get('depth', '?')} — {len(d.get('files_changed', []))} files changed"
+
+def _fmt_iteration_complete(d):
+    conv = "CONVERGED" if d.get("converged") else f"pass_rate={d.get('pass_rate', '?')}"
+    return f"depth {d.get('depth', '?')} — {conv}"
+
+def _fmt_iteration_session_complete(d):
+    conv = "CONVERGED" if d.get("converged") else "NOT CONVERGED"
+    return f"{conv} depth={d.get('final_depth', '?')} ${d.get('total_cost_usd', 0):.2f}"
+
+
+EVENT_FORMATTERS = {
+    "token_update":               _fmt_token_update,
+    "resource_snapshot":          _fmt_resource_snapshot,
+    "score":                      _fmt_score,
+    "agent_complete":             _fmt_agent_complete,
+    "test_passed":                _fmt_test_result,
+    "test_failed":                _fmt_test_result,
+    "verification_output":        _fmt_verification_output,
+    "instance_complete":          _fmt_instance_complete,
+    "instance_failed":            _fmt_instance_failed,
+    "parallel_complete":          _fmt_parallel_complete,
+    "parallel_started":           _fmt_parallel_started,
+    "iteration_started":          _fmt_iteration_started,
+    "iteration_diagnosed":        _fmt_iteration_diagnosed,
+    "iteration_fixed":            _fmt_iteration_fixed,
+    "iteration_complete":         _fmt_iteration_complete,
+    "iteration_session_complete": _fmt_iteration_session_complete,
+}
+
+
 def format_event(e: dict) -> str:
     ts = e.get("ts", "")[11:19]
     level = e.get("level", "?")
     event = e.get("event", "?")
     msg = e.get("msg", "")
+    data = e.get("data", {})
     color = LEVEL_COLORS.get(level, GREEN)
 
     line = f"{DIM}[{ts}]{RESET} {color}[{level}]{RESET} {BOLD}{event}{RESET} — {msg}"
 
-    data = e.get("data", {})
-    if event == "token_update":
-        line += f" {DIM}[{data.get('input', 0)}in/{data.get('output', 0)}out ${data.get('cost_usd', 0)}]{RESET}"
-    elif event == "resource_snapshot":
-        line += f" {DIM}[CPU {data.get('cpu', 0)}% Mem {data.get('mem', 0)}%]{RESET}"
-    elif event == "score":
-        line += f" {DIM}[{data.get('result', '?')}]{RESET}"
-    elif event == "agent_complete":
-        dur = data.get("duration_ms", 0)
-        line += f" {DIM}[{dur/1000:.1f}s]{RESET}"
-    elif event == "test_passed":
-        line += f" {DIM}[{data.get('test_name', '')}]{RESET}"
-    elif event == "test_failed":
-        line += f" {DIM}[{data.get('test_name', '')}]{RESET}"
-    elif event == "verification_output":
-        # Truncate for display
-        out = data.get("output", "")[:200]
-        line += f" {DIM}[exit={data.get('exit_code', '?')}, {len(data.get('output', ''))} chars]{RESET}"
-    elif event == "instance_complete":
-        line += f" {DIM}[#{data.get('instance', '?')} run={data.get('run_id', '?')} {data.get('result', '?')}]{RESET}"
-    elif event == "instance_failed":
-        line += f" {DIM}[#{data.get('instance', '?')} run={data.get('run_id', '?')} exit={data.get('exit_code', '?')}]{RESET}"
-    elif event == "parallel_complete":
-        line += f" {DIM}[{data.get('passed', 0)}/{data.get('total', 0)} passed, {data.get('duration_ms', 0)//1000}s]{RESET}"
-    elif event == "parallel_started":
-        line += f" {DIM}[{data.get('total', '?')} instances]{RESET}"
+    fmt = EVENT_FORMATTERS.get(event)
+    if fmt:
+        line += f" {DIM}[{fmt(data)}]{RESET}"
     elif data:
         line += f" {DIM}{json.dumps(data)}{RESET}"
     return line
@@ -140,12 +195,133 @@ def live_tail(log_path: Path):
         pass
 
 
+ANSI_RE = re.compile(r"\033\[[0-9;]*m")
+
+
+def format_stream(e: dict) -> str:
+    """Compact, no-color, one-line format for piping and grep."""
+    ts = e.get("ts", "")[11:19]
+    level = e.get("level", "?")
+    event = e.get("event", "?")
+    msg = e.get("msg", "")
+    data = e.get("data", {})
+
+    # Build key=val pairs from data (skip large fields)
+    kvs = []
+    for k, v in data.items():
+        sv = str(v)
+        if len(sv) > 80:
+            sv = sv[:77] + "..."
+        kvs.append(f"{k}={sv}")
+    kv_str = f" [{', '.join(kvs)}]" if kvs else ""
+    return f"{ts} {level:5s} {event} {msg}{kv_str}"
+
+
+def print_diff(id1: str, id2: str):
+    """Show config diff between two runs using archived config-snapshot dirs."""
+    snap1 = Path(f"results/{id1}/config-snapshot")
+    snap2 = Path(f"results/{id2}/config-snapshot")
+
+    if not snap1.exists() or not snap2.exists():
+        # Try project dir
+        from lib import PROJECT_DIR
+        snap1 = PROJECT_DIR / "results" / id1 / "config-snapshot"
+        snap2 = PROJECT_DIR / "results" / id2 / "config-snapshot"
+
+    if not snap1.exists():
+        print(f"No config snapshot for {id1}. Run with updated invoke.py to archive configs.", file=sys.stderr)
+        sys.exit(1)
+    if not snap2.exists():
+        print(f"No config snapshot for {id2}. Run with updated invoke.py to archive configs.", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"── Config diff: {id1} → {id2} ──\n")
+    result = subprocess.run(
+        ["diff", "-ruN", str(snap1), str(snap2)],
+        capture_output=True, text=True,
+    )
+    if result.stdout:
+        # Clean up paths for readability
+        output = result.stdout.replace(str(snap1), f"{id1}/.claude")
+        output = output.replace(str(snap2), f"{id2}/.claude")
+        print(output)
+    else:
+        print("  No differences in config.")
+
+
+def print_parallel_status(parallel_id: str):
+    """Show status table for all instances in a parallel run."""
+    log_path = RUN_ROOT / parallel_id / "events.jsonl"
+    if not log_path.exists():
+        print(f"No events for parallel run {parallel_id}", file=sys.stderr)
+        sys.exit(1)
+
+    events = load_events(log_path)
+
+    # Collect instance info
+    instances = {}
+    for e in events:
+        ev = e.get("event", "")
+        d = e.get("data", {})
+        inst = d.get("instance")
+        if inst is None:
+            continue
+
+        if inst not in instances:
+            instances[inst] = {"config": "?", "model": "?", "port": "?", "status": "launched", "result": "?", "run_id": "?", "cost": 0}
+
+        if ev == "instance_launched":
+            instances[inst].update({"config": d.get("config", "?"), "model": d.get("model", "?"), "port": d.get("port", "?")})
+        elif ev == "instance_complete":
+            instances[inst].update({"status": "done", "result": d.get("result", "?"), "run_id": d.get("run_id", "?")})
+        elif ev == "instance_failed":
+            instances[inst].update({"status": "failed", "result": "FAIL", "run_id": d.get("run_id", "?")})
+
+    # Enrich with token data from child runs
+    for inst, info in instances.items():
+        if info["run_id"] != "?":
+            child_log = RUN_ROOT / info["run_id"] / "events.jsonl"
+            if child_log.exists():
+                child_events = load_events(child_log)
+                tok = get_event(child_events, "token_update")
+                if tok:
+                    info["cost"] = tok["data"].get("cost_usd", 0)
+
+    # Check for overall completion
+    par_complete = get_event(events, "parallel_complete")
+
+    print(f"── Parallel run: {parallel_id} ──\n")
+
+    if par_complete:
+        d = par_complete["data"]
+        print(f"  Status: COMPLETE — {d.get('passed', 0)}/{d.get('total', 0)} passed ({d.get('duration_ms', 0)//1000}s)\n")
+    else:
+        done = sum(1 for i in instances.values() if i["status"] in ("done", "failed"))
+        print(f"  Status: RUNNING — {done}/{len(instances)} complete\n")
+
+    # Table
+    print(f"  {'#':>3}  {'Config':12s}  {'Model':10s}  {'Port':>5}  {'Status':8s}  {'Result':6s}  {'Cost':>7}  {'Run ID':8s}")
+    print(f"  {'─'*3}  {'─'*12}  {'─'*10}  {'─'*5}  {'─'*8}  {'─'*6}  {'─'*7}  {'─'*8}")
+
+    for idx in sorted(instances.keys()):
+        i = instances[idx]
+        cost_str = f"${i['cost']:.3f}" if i['cost'] else "—"
+        print(f"  {idx:>3}  {i['config']:12s}  {i['model']:10s}  {i['port']:>5}  {i['status']:8s}  {i['result']:6s}  {cost_str:>7}  {i['run_id']:8s}")
+
+    print()
+
+
 def main():
     run_id = None
     summary = False
+    stream = False
+    diff_ids = None
+    parallel_id = None
 
     args = sys.argv[1:]
-    for arg in args:
+    i = 0
+    while i < len(args):
+        arg = args[i]
         if arg == "--latest":
             dirs = sorted(Path(RUN_ROOT).iterdir(), key=lambda d: d.stat().st_mtime, reverse=True) \
                 if RUN_ROOT.exists() else []
@@ -154,11 +330,35 @@ def main():
             run_id = dirs[0].name
         elif arg == "--summary":
             summary = True
+        elif arg == "--stream":
+            stream = True
+        elif arg == "--diff":
+            if i + 2 >= len(args):
+                print("Usage: --diff <run_id1> <run_id2>", file=sys.stderr); sys.exit(1)
+            diff_ids = (args[i + 1], args[i + 2])
+            i += 2
+        elif arg == "--parallel":
+            if i + 1 >= len(args):
+                print("Usage: --parallel <parallel_run_id>", file=sys.stderr); sys.exit(1)
+            parallel_id = args[i + 1]
+            i += 1
         else:
             run_id = arg
+        i += 1
+
+    # Dispatch to special modes
+    if diff_ids:
+        print_diff(diff_ids[0], diff_ids[1])
+        return
+
+    if parallel_id:
+        print_parallel_status(parallel_id)
+        return
 
     if not run_id:
-        print("Usage: dashboard.py <run_id> | --latest [--summary]", file=sys.stderr)
+        print("Usage: dashboard.py <run_id> | --latest [--summary] [--stream]", file=sys.stderr)
+        print("       dashboard.py --diff <id1> <id2>", file=sys.stderr)
+        print("       dashboard.py --parallel <parallel_id>", file=sys.stderr)
         sys.exit(1)
 
     log_path = RUN_ROOT / run_id / "events.jsonl"
@@ -166,7 +366,11 @@ def main():
         print(f"No events found: {log_path}", file=sys.stderr)
         sys.exit(1)
 
-    if summary:
+    if stream:
+        events = load_events(log_path)
+        for e in events:
+            print(format_stream(e))
+    elif summary:
         events = load_events(log_path)
         print_summary(run_id, events)
     else:

@@ -42,6 +42,13 @@ All events are JSONL lines appended to `/tmp/agent-spec/{run_id}/events.jsonl`.
 - `instance_failed` — instance, run_id, exit_code, stderr_tail
 - `parallel_complete` — total, passed, failed, run_ids, duration_ms
 
+### Iteration
+- `iteration_started` — depth, max_depth, target, config, session_id, instances
+- `iteration_diagnosed` — depth, session_id, findings_count, findings_summary
+- `iteration_fixed` — depth, session_id, files_changed (list of paths)
+- `iteration_complete` — depth, session_id, converged (bool), pass_rate, duration_ms
+- `iteration_session_complete` — session_id, final_depth, converged, total_cost_usd, total_duration_ms
+
 ### Metrics
 - `token_update` — input, output, cache_create, cache_read, cost_usd, turns
 - `resource_snapshot` — cpu, mem, disk_free_gb
@@ -96,9 +103,14 @@ jq 'select(.event=="debug:verify")' /tmp/agent-spec/<run_id>/events.jsonl
 ## Reading
 
 - Live: `scripts/dashboard.py <run_id>`
+- Stream (compact, no color): `scripts/dashboard.py <run_id> --stream`
 - Tokens: `scripts/tokens.py <run_id>`
+- Session tokens: `scripts/tokens.py --session <session_id>`
 - Score: `scripts/score.py <run_id>`
 - Resources: `scripts/resources.sh <run_id>`
 - Compare: `python3 scripts/report.py --compare <run_id> <run_id>`
+- Session report: `python3 scripts/report.py --session <session_id>`
 - Full report: `python3 scripts/report.py --all`
+- Config diff: `scripts/dashboard.py --diff <run_id1> <run_id2>`
+- Parallel status: `scripts/dashboard.py --parallel <parallel_run_id>`
 - Raw: `jq 'select(.event=="token_update")' /tmp/agent-spec/{run_id}/events.jsonl`

@@ -40,6 +40,12 @@ def _archive_and_cleanup():
             if src.exists():
                 shutil.copy2(src, _results_dir / artifact)
 
+        # Archive config snapshot for diff comparison
+        if _sandbox and _sandbox.exists():
+            claude_dir = _sandbox / ".claude"
+            if claude_dir.exists():
+                shutil.copytree(claude_dir, _results_dir / "config-snapshot", dirs_exist_ok=True)
+
         # Archive produced files from sandbox
         if _sandbox and _sandbox.exists():
             for ext in ("*.py", "*.js", "*.ts"):

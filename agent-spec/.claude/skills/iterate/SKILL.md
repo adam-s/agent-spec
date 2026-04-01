@@ -50,11 +50,19 @@ Do NOT launch agents until the user answers.
 Use the existing tools at each step — do not reimplement.
 
 ```
+session_id = uuid4().hex[:8]   # Correlates all iterations in this /iterate invocation
 depth = 0
 
 RECURSE:
   if depth >= max_depth:
+    EMIT: apc_log("INFO", "iteration_session_complete", "Max depth reached",
+           {"session_id": session_id, "final_depth": depth, "converged": false,
+            "total_cost_usd": <sum from all runs>, "total_duration_ms": <wall clock>})
     RETURN with summary: "Max depth reached. Best results: ..."
+
+  EMIT: apc_log("INFO", "iteration_started", "Starting iteration",
+         {"depth": depth, "max_depth": max_depth, "target": target,
+          "config": config, "session_id": session_id, "instances": N})
 
   1. CLEAN
      python3 scripts/cleanup.py
@@ -92,6 +100,11 @@ RECURSE:
 
   7. STOP CONDITION CHECK
      if all instances PASS and no regressions:
+       EMIT: apc_log("INFO", "iteration_complete", "Converged",
+              {"depth": depth, "session_id": session_id, "converged": true, "pass_rate": "N/N"})
+       EMIT: apc_log("INFO", "iteration_session_complete", "Session converged",
+              {"session_id": session_id, "final_depth": depth, "converged": true,
+               "total_cost_usd": <sum>, "total_duration_ms": <wall clock>})
        RETURN with summary: "Converged at depth {depth}."
 
   8. DIAGNOSE
@@ -100,10 +113,22 @@ RECURSE:
        "Level 0 fix (trainer): ___" or "Level 2 fix (trainee): ___"
      If uncertain, ask the human.
 
+     EMIT: apc_log("INFO", "iteration_diagnosed", "Diagnosis complete",
+            {"depth": depth, "session_id": session_id,
+             "findings_count": <N>, "findings_summary": "brief description"})
+
   9. APPLY FIXES
      Level 2 → target's .claude/
      Level 0 → agent-spec (selective)
      After each fix, consistency-check all .claude/ files at that level.
+
+     EMIT: apc_log("INFO", "iteration_fixed", "Fixes applied",
+            {"depth": depth, "session_id": session_id,
+             "files_changed": ["path/to/file1", "path/to/file2"]})
+
+     EMIT: apc_log("INFO", "iteration_complete", "Iteration done",
+            {"depth": depth, "session_id": session_id, "converged": false,
+             "pass_rate": "M/N", "duration_ms": <elapsed>})
 
   10. depth += 1
       GOTO RECURSE
