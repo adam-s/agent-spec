@@ -30,13 +30,20 @@ Key skills: `/run-eval`, `/iterate`, `/report`, `/stop`, `/new-target`
 
 Runs log structured JSONL events to `/tmp/agent-spec/{run_id}/events.jsonl`.
 
+**IMPORTANT**: When launching long-running eval or parallel runs, ALWAYS print the monitoring command for the user to run in a separate terminal. Do NOT block waiting, sleep-poll, or run background watches. Instead, tell the user:
+
+> To watch live, run in another terminal:
+> `tail -f /tmp/agent-spec-parallel-out-*.log`
+> or: `scripts/cli/dashboard.sh --latest`
+
+Then use `run_in_background` for the actual run and let the system notify you when it completes.
+
+### Commands
+
 ```bash
 # Watch a run live (color-coded, formatted)
 scripts/cli/dashboard.sh <run_id>
 scripts/cli/dashboard.sh --latest
-
-# Watch raw events
-tail -f /tmp/agent-spec/<run_id>/events.jsonl | jq .
 
 # Watch all parallel runs at once
 tail -f /tmp/agent-spec-parallel-out-*.log
@@ -44,9 +51,6 @@ tail -f /tmp/agent-spec-parallel-out-*.log
 # Diagnose a failed run
 cat /tmp/agent-spec/<run_id>/stderr.log
 scripts/cli/dashboard.sh <run_id> --summary
-
-# Filter specific events
-scripts/cli/dashboard.sh <run_id> --events score,agent_error
 ```
 
 See @.claude/rules/log-protocol.md for the full event schema and all reading tools.
