@@ -99,6 +99,13 @@ SANDBOX=$(bash "$SANDBOX_DIR/copy-repo.sh" "$SOURCE" "$AGENT_SPEC_RUN_ID")
 
 # Cleanup trap: stop sidecar and remove sandbox on any exit
 SIDECAR_PID=""
+TERMINATED_BY_SIGNAL=""
+handle_signal() {
+  TERMINATED_BY_SIGNAL="$1"
+  apc_log "ERROR" "run_terminated" "Run terminated by signal" \
+    "{\"signal\":\"$1\",\"run_id\":\"$AGENT_SPEC_RUN_ID\"}"
+  exit 1
+}
 cleanup() {
   [[ -n "$SIDECAR_PID" ]] && kill "$SIDECAR_PID" 2>/dev/null || true
   bash "$SCRIPT_DIR/../sandbox/clear-ports.sh" 2>/dev/null || true
@@ -107,6 +114,12 @@ cleanup() {
   fi
 }
 trap cleanup EXIT
+trap 'handle_signal SIGTERM' TERM
+trap 'handle_signal SIGINT' INT
+trap 'handle_signal SIGHUP' HUP
+
+apc_log "DEBUG" "sandbox_created" "Sandbox ready" \
+  "{\"sandbox\":\"$SANDBOX\",\"source\":\"$SOURCE\"}"
 
 # 3. Delete files the agent must produce (comma-separated)
 if [[ -n "$DELETE_FILES" ]]; then
@@ -114,6 +127,8 @@ if [[ -n "$DELETE_FILES" ]]; then
   for f in "${DEL_LIST[@]}"; do
     rm -rf "$SANDBOX/$f" && echo "  Deleted: $f (agent must produce this)"
   done
+  apc_log "DEBUG" "files_deleted" "Deleted files for agent to produce" \
+    "{\"files\":\"$DELETE_FILES\"}"
 fi
 
 # 4. Inject files from target's inject/ directory (cordyceps — AFTER delete)
@@ -134,8 +149,12 @@ if [[ -n "$SETUP_CMDS" ]]; then
     cmd=$(echo "$cmd" | xargs)  # trim whitespace
     [[ -z "$cmd" ]] && continue
     echo "    $ $cmd"
-    (cd "$SANDBOX" && eval "$cmd") || echo "    WARNING: setup command failed: $cmd"
+    (cd "$SANDBOX" && eval "$cmd") || {
+      echo "    WARNING: setup command failed: $cmd"
+      apc_log "WARN" "setup_failed" "Setup command failed" "{\"cmd\":\"$cmd\"}"
+    }
   done
+  apc_log "DEBUG" "setup_complete" "Setup commands finished" '{}'
 fi
 
 # 5. Swap .claude/ with test config

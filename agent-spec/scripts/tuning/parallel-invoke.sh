@@ -107,6 +107,9 @@ MANIFEST="/tmp/agent-spec-parallel-$(date +%s)-$$.txt"
 : > "$MANIFEST"
 
 echo "Launching $TOTAL parallel instance(s) of $TARGET_NAME" >&2
+echo "  Logs: /tmp/agent-spec-parallel-out-$$-{1..$TOTAL}.log" >&2
+echo "  Watch: tail -f /tmp/agent-spec-parallel-out-$$-*.log" >&2
+echo "" >&2
 
 for i in $(seq 1 "$TOTAL"); do
   IDX=$((i - 1))
@@ -181,9 +184,21 @@ for i in $(seq 1 "$TOTAL"); do
     echo "  Instance $i: run=$RUN_ID exit=$EXIT $RESULT" >&2
     if [[ "$RESULT" != *"PASS"* ]]; then
       FAILURES=$((FAILURES + 1))
+      # Dump last 15 lines of failed instance log for diagnosis
+      echo "  --- Instance $i failure log (last 15 lines) ---" >&2
+      tail -15 "$LOG" 2>/dev/null | sed 's/^/    /' >&2
+      echo "  --- end ---" >&2
+    fi
+    # Archive instance log to results
+    INSTANCE_RESULTS="$PROJECT_DIR/results/$RUN_ID"
+    if [[ -d "$INSTANCE_RESULTS" ]]; then
+      cp "$LOG" "$INSTANCE_RESULTS/parallel-instance.log" 2>/dev/null || true
     fi
   else
     echo "  Instance $i: exit=$EXIT (no run_id found)" >&2
+    echo "  --- Instance $i failure log (last 15 lines) ---" >&2
+    tail -15 "$LOG" 2>/dev/null | sed 's/^/    /' >&2
+    echo "  --- end ---" >&2
     FAILURES=$((FAILURES + 1))
   fi
 done

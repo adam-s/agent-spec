@@ -26,6 +26,31 @@ Key skills: `/run-eval`, `/iterate`, `/report`, `/stop`, `/new-target`
 - **Ports** 3100-3110 allocated per run; use `__PORT__` in prompt.md, `--port N` for parallel pre-assignment
 - **Cordyceps** — delete, inject, or swap any file in sandbox before the agent sees it
 
+## Monitoring
+
+Runs log structured JSONL events to `/tmp/agent-spec/{run_id}/events.jsonl`.
+
+```bash
+# Watch a run live (color-coded, formatted)
+scripts/cli/dashboard.sh <run_id>
+scripts/cli/dashboard.sh --latest
+
+# Watch raw events
+tail -f /tmp/agent-spec/<run_id>/events.jsonl | jq .
+
+# Watch all parallel runs at once
+tail -f /tmp/agent-spec-parallel-out-*.log
+
+# Diagnose a failed run
+cat /tmp/agent-spec/<run_id>/stderr.log
+scripts/cli/dashboard.sh <run_id> --summary
+
+# Filter specific events
+scripts/cli/dashboard.sh <run_id> --events score,agent_error
+```
+
+See @.claude/rules/log-protocol.md for the full event schema and all reading tools.
+
 ## Reference
 
 - @.claude/rules/operational-workflow.md — tools, scripts, and workflow patterns

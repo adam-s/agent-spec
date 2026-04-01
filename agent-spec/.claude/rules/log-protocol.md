@@ -14,13 +14,25 @@ All events are JSONL lines appended to `/tmp/agent-spec/{run_id}/events.jsonl`.
 
 ## Well-Known Events
 
-- `agent_started` — target, config, model, budget
+### Lifecycle
+- `sandbox_created` — sandbox, source
+- `files_deleted` — files (comma-separated list)
+- `config_swapped` — config, sandbox
+- `setup_complete` — (no data)
+- `setup_failed` — cmd
+- `agent_started` — target, config, model, budget, port
 - `agent_complete` — exit_code, duration_ms
 - `agent_error` — exit_code, duration_ms, stderr_tail
+- `agent_timeout` — (timeout exceeded)
+- `run_terminated` — signal, run_id (external SIGTERM/SIGINT/SIGHUP)
+
+### Metrics
 - `token_update` — input, output, cache_create, cache_read, cost_usd, turns
 - `resource_snapshot` — cpu, mem, disk_free_gb
+
+### Verification
 - `test_passed` / `test_failed` — test_name
-- `score` — result (PASS/FAIL)
+- `score` — result (PASS/FAIL/N/A)
 
 ## Emitting
 

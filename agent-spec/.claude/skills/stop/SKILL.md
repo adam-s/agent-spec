@@ -1,42 +1,75 @@
 ---
 name: stop
-description: Emergency stop — halt all agent-spec processes, remove sandboxes, clean up
+description: Emergency stop — halt all agent-spec processes, clear ports, remove sandboxes, prune worktrees, verify clean state.
 disable-model-invocation: true
 ---
 
 # /stop — Emergency Cleanup
 
-Stop all tracked processes, remove all sandboxes, and verify clean state.
+Run these steps in order:
 
-## Steps
+## 1. Stop all background agents
 
-1. Halt all tracked PIDs from `/tmp/agent-spec-pids.txt`
-2. Stop processes on common test ports (3100-3105)
-3. Shut down orphaned bun/node processes from test runs
-4. Remove all sandbox directories in `/tmp/claude/agent-spec-*/`
-5. Remove all APC channel data in `/tmp/agent-spec/`
-6. Verify clean state
+Stop any running agents using TaskStop for each active agent ID. If IDs are unknown, proceed to process cleanup.
 
-## Run
+## 2. Stop agent-spec processes
 
 ```bash
-bash "$CLAUDE_PROJECT_DIR/scripts/sandbox/cleanup.sh"
+# Stop tracked PIDs
+if [ -f /tmp/agent-spec-pids.txt ]; then
+  while IFS='|' read -r pid port purpose; do
+    kill "$pid" 2>/dev/null && echo "Stopped PID $pid ($purpose) on port $port"
+  done < /tmp/agent-spec-pids.txt
+  : > /tmp/agent-spec-pids.txt
+fi
 
-# Also clean APC channels
-rm -rf /tmp/agent-spec/*/
-
-# Shut down any remaining bun/node orphans
-pkill -9 -f "bun.*server" 2>/dev/null || true
-pkill -9 -f "node.*queries" 2>/dev/null || true
-
-# Verify
-echo ""
-echo "=== Verification ==="
-echo "Sandboxes: $(ls -d /tmp/claude/agent-spec-*/ 2>/dev/null | wc -l | tr -d ' ' || echo 0)"
-echo "APC channels: $(ls -d /tmp/agent-spec/*/ 2>/dev/null | wc -l | tr -d ' ' || echo 0)"
-echo "Tracked PIDs: $(cat /tmp/agent-spec-pids.txt 2>/dev/null | wc -l | tr -d ' ' || echo 0)"
-echo "Bun processes: $(pgrep -f 'bun.*server' 2>/dev/null | wc -l | tr -d ' ' || echo 0)"
-echo "Node processes: $(pgrep -f 'node.*queries' 2>/dev/null | wc -l | tr -d ' ' || echo 0)"
+# Stop processes on reserved port ranges
+for port in $(seq 3100 3110) $(seq 4000 4010); do
+  pids=$(lsof -ti:"$port" 2>/dev/null || true)
+  if [ -n "$pids" ]; then
+    echo "$pids" | xargs kill -9 2>/dev/null || true
+    echo "Cleared port $port"
+  fi
+done
 ```
 
-After running, confirm all counts are 0.
+## 3. Stop orphaned processes
+
+```bash
+pkill -9 -f "bun.*server" 2>/dev/null || true
+pkill -9 -f "node.*queries" 2>/dev/null || true
+pkill -f "chromium.*agent-spec" 2>/dev/null || true
+pkill -f "patchright" 2>/dev/null || true
+pkill -f "sidecar.sh" 2>/dev/null || true
+```
+
+## 4. Remove sandboxes and temp data
+
+```bash
+rm -rf /tmp/claude/agent-spec-*/
+rm -rf /tmp/agent-spec/*/
+rm -rf /tmp/agent-spec-inject-*/
+rm -rf /tmp/agent-spec-parallel-*.txt
+```
+
+## 5. Prune worktrees
+
+```bash
+git worktree prune 2>/dev/null || true
+rm -rf .claude/worktrees/*/ 2>/dev/null || true
+```
+
+## 6. Verify clean state
+
+```bash
+echo ""
+echo "=== Verification ==="
+echo "Sandboxes:    $(ls -d /tmp/claude/agent-spec-*/ 2>/dev/null | wc -l | tr -d ' ')"
+echo "APC channels: $(ls -d /tmp/agent-spec/*/ 2>/dev/null | wc -l | tr -d ' ')"
+echo "Tracked PIDs: $(cat /tmp/agent-spec-pids.txt 2>/dev/null | wc -l | tr -d ' ')"
+echo "Port 3100:    $(lsof -ti:3100 2>/dev/null | wc -l | tr -d ' ')"
+echo "Bun procs:    $(pgrep -f 'bun.*server' 2>/dev/null | wc -l | tr -d ' ')"
+echo "Node procs:   $(pgrep -f 'node.*queries' 2>/dev/null | wc -l | tr -d ' ')"
+```
+
+All counts should be 0. If any are non-zero, re-run the relevant step.
