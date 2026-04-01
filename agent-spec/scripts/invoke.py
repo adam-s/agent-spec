@@ -173,10 +173,14 @@ def main():
             if not cmd:
                 continue
             print(f"  Setup: {cmd}")
-            result = subprocess.run(cmd, shell=True, cwd=sandbox_path)
+            result = subprocess.run(cmd, shell=True, cwd=sandbox_path,
+                                    capture_output=True, text=True)
             if result.returncode != 0:
-                apc_log("WARN", "setup_failed", f"Setup failed: {cmd}", {"cmd": cmd})
-                print(f"  WARNING: setup failed: {cmd}", file=sys.stderr)
+                apc_log("WARN", "setup_failed", f"Setup failed: {cmd}",
+                        {"cmd": cmd, "exit_code": result.returncode, "stderr": result.stderr[:500]})
+            else:
+                apc_log("DEBUG", "setup_command", f"Setup: {cmd}",
+                        {"cmd": cmd, "exit_code": 0})
         apc_log("DEBUG", "setup_complete", "Setup finished")
 
     # 3d. Swap .claude/
@@ -188,7 +192,8 @@ def main():
         shutil.copytree(config_path, claude_dir)
     else:
         claude_dir.mkdir()
-        print("  WARNING: Empty config — agent has no instructions", file=sys.stderr)
+        apc_log("WARN", "empty_config", "Agent has no instructions",
+                {"config": config_name})
     apc_log("INFO", "config_swapped", "Config applied", {"config": config_name})
 
     # 3e. Inject emitters
@@ -213,6 +218,8 @@ def main():
          f"time.sleep(30)) for _ in iter(int, 1)]"],
         env={**os.environ}
     )
+    apc_log("DEBUG", "sidecar_started", "Resource monitor started",
+            {"pid": _sidecar_proc.pid, "interval": 30})
 
     # ── Phase 4: EXECUTE ─────────────────────────────────────────
     prompt_text = Path(args.prompt_file).read_text()
@@ -280,6 +287,9 @@ def main():
         )
         output = vresult.stdout + vresult.stderr
         print(output)
+
+        apc_log("INFO", "verification_output", "Verify script output",
+                {"output": output[:5000], "exit_code": vresult.returncode})
 
         # Parse individual test results
         for line in output.splitlines():

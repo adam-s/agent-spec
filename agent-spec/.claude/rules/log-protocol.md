@@ -17,22 +17,34 @@ All events are JSONL lines appended to `/tmp/agent-spec/{run_id}/events.jsonl`.
 ### Lifecycle
 - `sandbox_created` — sandbox, source
 - `files_deleted` — files (comma-separated list)
-- `config_swapped` — config, sandbox
-- `setup_complete` — (no data)
-- `setup_failed` — cmd
+- `files_injected` — from (inject directory path)
+- `setup_command` — cmd, exit_code (each successful setup command)
+- `setup_complete` — (all setup done)
+- `setup_failed` — cmd, exit_code, stderr
+- `empty_config` — config (WARN: agent has no instructions)
+- `config_swapped` — config
+- `sidecar_started` — pid, interval
 - `agent_started` — target, config, model, budget, port
 - `agent_complete` — exit_code, duration_ms
-- `agent_error` — exit_code, duration_ms, stderr_tail
-- `agent_timeout` — (timeout exceeded)
+- `agent_error` — exit_code, duration_ms, stderr
+- `agent_timeout` — timeout
 - `run_terminated` — signal, run_id (external SIGTERM/SIGINT/SIGHUP)
+
+### Verification
+- `verification_output` — output (full verify.sh stdout+stderr), exit_code
+- `test_passed` / `test_failed` — test_name
+- `score` — result (PASS/FAIL/N/A)
+
+### Parallel
+- `parallel_started` — target, total, configs, models, instances
+- `instance_launched` — instance, config, model, port
+- `instance_complete` — instance, run_id, result, exit_code
+- `instance_failed` — instance, run_id, exit_code, stderr_tail
+- `parallel_complete` — total, passed, failed, run_ids, duration_ms
 
 ### Metrics
 - `token_update` — input, output, cache_create, cache_read, cost_usd, turns
 - `resource_snapshot` — cpu, mem, disk_free_gb
-
-### Verification
-- `test_passed` / `test_failed` — test_name
-- `score` — result (PASS/FAIL/N/A)
 
 ## Emitting
 

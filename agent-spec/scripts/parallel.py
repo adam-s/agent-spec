@@ -20,10 +20,12 @@ import re
 import shutil
 import subprocess
 import sys
+import time
+import uuid
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from lib import PROJECT_DIR, SCRIPTS_DIR, PORT_MIN, PORT_MAX, die, require_dir
+from lib import PROJECT_DIR, SCRIPTS_DIR, PORT_MIN, PORT_MAX, die, require_dir, apc_log, now_ms
 
 
 def main():
@@ -72,9 +74,21 @@ def main():
     procs = []
     log_files = []
 
+    # Generate parallel master run_id
+    parallel_id = f"p-{uuid.uuid4().hex[:8]}"
+    os.environ["AGENT_SPEC_RUN_ID"] = parallel_id
+    start_ms = now_ms()
+
+    apc_log("INFO", "parallel_started", f"Launching {total} instances of {args.target}", {
+        "target": args.target, "total": total,
+        "configs": config_list, "models": model_list, "instances": args.instances,
+    })
+
     print(f"Launching {total} parallel instance(s) of {args.target}", file=sys.stderr)
+    print(f"  Parallel ID: {parallel_id}", file=sys.stderr)
     print(f"  Logs: /tmp/agent-spec-parallel-out-{pid}-{{1..{total}}}.log", file=sys.stderr)
     print(f"  Watch: tail -f /tmp/agent-spec-parallel-out-{pid}-*.log", file=sys.stderr)
+    print(f"  Master: python3 scripts/dashboard.py {parallel_id} --summary", file=sys.stderr)
     print(file=sys.stderr)
 
     for i, (v_config, v_model) in enumerate(variants, 1):
@@ -100,6 +114,8 @@ def main():
         if v_model:
             desc += f" / {Path(v_model).name}"
         print(f"  Instance {i}: {desc} (port {instance_port})", file=sys.stderr)
+        apc_log("DEBUG", "instance_launched", f"Instance {i}: {desc}",
+                {"instance": i, "config": v_config, "model": v_model, "port": instance_port})
 
         # Build args
         cmd = [
@@ -126,7 +142,7 @@ def main():
     # Collect results
     failures = 0
     run_ids = []
-    manifest = f"/tmp/agent-spec-parallel-{pid}-{int(__import__('time').time())}.txt"
+    manifest = f"/tmp/agent-spec-parallel-{pid}-{int(time.time())}.txt"
 
     for i, proc in enumerate(procs, 1):
         proc.wait()
@@ -160,6 +176,19 @@ def main():
 
             if "PASS" not in result_line:
                 failures += 1
+                stderr_tail = ""
+                try:
+                    stderr_tail = Path(log_file).read_text().splitlines()[-15:]
+                    stderr_tail = "\n".join(stderr_tail)[:500]
+                except (FileNotFoundError, IndexError):
+                    pass
+                apc_log("ERROR", "instance_failed", f"Instance {i} failed",
+                        {"instance": i, "run_id": run_id, "result": result_line,
+                         "exit_code": exit_code, "stderr_tail": stderr_tail})
+            else:
+                apc_log("INFO", "instance_complete", f"Instance {i} passed",
+                        {"instance": i, "run_id": run_id, "result": result_line,
+                         "exit_code": exit_code})
                 print(f"  --- Failure log (last 15 lines) ---", file=sys.stderr)
                 try:
                     lines = Path(log_file).read_text().splitlines()
@@ -170,6 +199,8 @@ def main():
                 print(f"  --- end ---", file=sys.stderr)
         else:
             print(f"  Instance {i}: exit={exit_code} (no run_id)", file=sys.stderr)
+            apc_log("ERROR", "instance_failed", f"Instance {i} crashed (no run_id)",
+                    {"instance": i, "exit_code": exit_code})
             print(f"  --- Failure log (last 15 lines) ---", file=sys.stderr)
             try:
                 lines = Path(log_file).read_text().splitlines()
@@ -179,6 +210,11 @@ def main():
                 pass
             print(f"  --- end ---", file=sys.stderr)
             failures += 1
+
+    duration_ms = now_ms() - start_ms
+    apc_log("INFO", "parallel_complete", f"{total - failures}/{total} passed",
+            {"total": total, "passed": total - failures, "failed": failures,
+             "run_ids": run_ids, "duration_ms": duration_ms})
 
     # Clean up inject dirs
     for d in Path("/tmp").glob(f"agent-spec-inject-{pid}-*"):

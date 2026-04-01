@@ -50,6 +50,18 @@ def format_event(e: dict) -> str:
         line += f" {DIM}[{data.get('test_name', '')}]{RESET}"
     elif event == "test_failed":
         line += f" {DIM}[{data.get('test_name', '')}]{RESET}"
+    elif event == "verification_output":
+        # Truncate for display
+        out = data.get("output", "")[:200]
+        line += f" {DIM}[exit={data.get('exit_code', '?')}, {len(data.get('output', ''))} chars]{RESET}"
+    elif event == "instance_complete":
+        line += f" {DIM}[#{data.get('instance', '?')} run={data.get('run_id', '?')} {data.get('result', '?')}]{RESET}"
+    elif event == "instance_failed":
+        line += f" {DIM}[#{data.get('instance', '?')} run={data.get('run_id', '?')} exit={data.get('exit_code', '?')}]{RESET}"
+    elif event == "parallel_complete":
+        line += f" {DIM}[{data.get('passed', 0)}/{data.get('total', 0)} passed, {data.get('duration_ms', 0)//1000}s]{RESET}"
+    elif event == "parallel_started":
+        line += f" {DIM}[{data.get('total', '?')} instances]{RESET}"
     elif data:
         line += f" {DIM}{json.dumps(data)}{RESET}"
     return line
