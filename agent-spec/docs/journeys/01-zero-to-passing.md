@@ -9,11 +9,14 @@
 Use `csv-reporter` for a fast loop (~30s per run, cheap with haiku):
 
 ```bash
-python3 scripts/run_eval.py csv-reporter baseline
+python3 scripts/run_eval.py csv-reporter baseline --model claude-haiku-4-5-20251001 --budget 0.50
 python3 scripts/dashboard.py --latest --summary
 ```
 
-If the baseline already passes, make it harder — delete more files or tighten the verify.sh criteria. The point is to start from failure.
+**Note:** As of 2026-04, all 3 existing targets (csv-reporter, sqlite-window-queries, hono-websocket-counter) pass with haiku + baseline. To exercise the zero-to-passing loop, either:
+- **Onboard a new, harder project** via `/new-target`
+- **Tighten verify.sh** to require something the agent doesn't produce by default
+- **Delete more files** in target.yaml's `delete_before_run` to increase difficulty
 
 ## Run the Iteration
 

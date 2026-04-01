@@ -25,9 +25,14 @@ Every common operation has a script or skill. Before writing any bash to sandbox
 | `scripts/parallel.py <target> --instances N` | N reps of same config |
 | `scripts/dashboard.py <run_id>` | Monitor a run (live or summary) |
 | `scripts/dashboard.py --latest` | Monitor most recent run |
+| `scripts/dashboard.py <id> --stream` | Compact no-color output (grep-friendly) |
+| `scripts/dashboard.py --diff <id1> <id2>` | Config diff between two runs |
+| `scripts/dashboard.py --parallel <id>` | Multi-instance status table |
 | `scripts/report.py --all` | Full report across all runs |
 | `scripts/report.py --all --group-by config` | Compare configs with deltas |
 | `scripts/report.py --all --group-by model` | Compare models with deltas |
+| `scripts/report.py --session <session_id>` | Iterate session report by depth |
+| `scripts/tokens.py --session <session_id>` | Cost rollup across iterate session |
 | `scripts/cleanup.py` | Full state reset (ports, sandboxes, PIDs) |
 
 ## Config resolution

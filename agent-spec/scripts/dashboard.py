@@ -299,14 +299,24 @@ def print_parallel_status(parallel_id: str):
         done = sum(1 for i in instances.values() if i["status"] in ("done", "failed"))
         print(f"  Status: RUNNING — {done}/{len(instances)} complete\n")
 
+    # Shorten model names for display
+    def short_model(m):
+        m = str(m)
+        for prefix in ("claude-", "anthropic-"):
+            m = m.replace(prefix, "")
+        # Trim date suffixes like -20251001
+        if len(m) > 15 and m[-8:].isdigit():
+            m = m[:-9]
+        return m
+
     # Table
-    print(f"  {'#':>3}  {'Config':12s}  {'Model':10s}  {'Port':>5}  {'Status':8s}  {'Result':6s}  {'Cost':>7}  {'Run ID':8s}")
-    print(f"  {'─'*3}  {'─'*12}  {'─'*10}  {'─'*5}  {'─'*8}  {'─'*6}  {'─'*7}  {'─'*8}")
+    print(f"  {'#':>3}  {'Config':15s}  {'Model':12s}  {'Port':>5}  {'Status':8s}  {'Result':6s}  {'Cost':>7}  {'Run ID':8s}")
+    print(f"  {'─'*3}  {'─'*15}  {'─'*12}  {'─'*5}  {'─'*8}  {'─'*6}  {'─'*7}  {'─'*8}")
 
     for idx in sorted(instances.keys()):
         i = instances[idx]
         cost_str = f"${i['cost']:.3f}" if i['cost'] else "—"
-        print(f"  {idx:>3}  {i['config']:12s}  {i['model']:10s}  {i['port']:>5}  {i['status']:8s}  {i['result']:6s}  {cost_str:>7}  {i['run_id']:8s}")
+        print(f"  {idx:>3}  {i['config']:15s}  {short_model(i['model']):12s}  {i['port']:>5}  {i['status']:8s}  {i['result']:6s}  {cost_str:>7}  {i['run_id']:8s}")
 
     print()
 

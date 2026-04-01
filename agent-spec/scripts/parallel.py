@@ -174,6 +174,9 @@ def main():
             if results_dir.is_dir():
                 shutil.copy2(log_file, results_dir / "parallel-instance.log")
 
+            # Normalize result to just PASS/FAIL (strip "RESULT: " prefix)
+            result_short = result_line.replace("RESULT: ", "")
+
             if "PASS" not in result_line:
                 failures += 1
                 stderr_tail = ""
@@ -183,12 +186,12 @@ def main():
                 except (FileNotFoundError, IndexError):
                     pass
                 apc_log("ERROR", "instance_failed", f"Instance {i} failed",
-                        {"instance": i, "run_id": run_id, "result": result_line,
+                        {"instance": i, "run_id": run_id, "result": result_short,
                          "exit_code": exit_code, "stderr_tail": stderr_tail},
                         run_id=parallel_id)
             else:
                 apc_log("INFO", "instance_complete", f"Instance {i} passed",
-                        {"instance": i, "run_id": run_id, "result": result_line,
+                        {"instance": i, "run_id": run_id, "result": result_short,
                          "exit_code": exit_code},
                         run_id=parallel_id)
         else:

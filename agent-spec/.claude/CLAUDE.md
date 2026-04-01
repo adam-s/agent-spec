@@ -45,8 +45,20 @@ Then use `run_in_background` for the actual run and let the system notify you wh
 python3 scripts/dashboard.py <run_id>
 python3 scripts/dashboard.py --latest
 
+# Compact grep-friendly output (no ANSI colors)
+python3 scripts/dashboard.py <run_id> --stream
+
 # Watch all parallel runs at once
 tail -f /tmp/agent-spec-parallel-out-*.log
+
+# Multi-instance parallel status table
+python3 scripts/dashboard.py --parallel <parallel_id>
+
+# Config diff between two runs
+python3 scripts/dashboard.py --diff <run_id1> <run_id2>
+
+# Cost rollup across an iterate session
+python3 scripts/tokens.py --session <session_id>
 
 # Diagnose a failed run
 cat /tmp/agent-spec/<run_id>/stderr.log
