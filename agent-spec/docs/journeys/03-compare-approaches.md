@@ -11,28 +11,28 @@ You have two instruction variants and want to know which is better. Or you want 
 ### 1. A/B test two configs
 
 ```bash
-scripts/tuning/parallel-invoke.sh my-project --configs baseline,tuned \
+scripts/parallel.sh my-project --configs baseline,tuned \
   --model claude-haiku-4-5-20251001 --budget 0.50
 ```
 
 ### 2. Compare configs
 
 ```bash
-python3 scripts/reporting/report.py --compare <baseline_id> <tuned_id>
-python3 scripts/reporting/report.py <baseline_id> <tuned_id> --group-by config
+python3 scripts/report.py --compare <baseline_id> <tuned_id>
+python3 scripts/report.py <baseline_id> <tuned_id> --group-by config
 ```
 
 ### 3. Benchmark two models
 
 ```bash
-scripts/tuning/parallel-invoke.sh my-project tuned \
+scripts/parallel.sh my-project tuned \
   --models claude-haiku-4-5-20251001,claude-sonnet-4-6 --budget 1.00
 ```
 
 ### 4. Full matrix
 
 ```bash
-scripts/tuning/parallel-invoke.sh my-project \
+scripts/parallel.sh my-project \
   --configs baseline,tuned \
   --models claude-haiku-4-5-20251001,claude-sonnet-4-6 \
   --budget 1.00

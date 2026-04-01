@@ -63,7 +63,7 @@ Failed: N
 ### Attack: Port exhaustion
 Target: Journey 3 — "Port range 3100-3110 supports up to 11 simultaneous runs"
 ```bash
-scripts/tuning/parallel-invoke.sh csv-reporter --instances 12 \
+scripts/parallel.sh csv-reporter --instances 12 \
   --model claude-haiku-4-5-20251001 --budget 0.10
 ```
 Expected: 11 succeed, 12th gets error or waits. Not: silent port collision.
@@ -72,7 +72,7 @@ Expected: 11 succeed, 12th gets error or waits. Not: silent port collision.
 Target: Journey 4 — "Baseline file exists but is corrupt JSON"
 ```bash
 echo "not json" > results/baselines/csv-reporter_baseline.json
-scripts/reporting/check-regression.sh <some_run_id>
+scripts/check-regression.sh <some_run_id>
 ```
 Expected: error message. Not: Python traceback.
 
@@ -97,8 +97,8 @@ Expected: sandbox created, eval runs. Not: bash word-splitting errors.
 ### Attack: Simultaneous save-baseline
 Target: Journey 4 — "Two users save baselines simultaneously"
 ```bash
-scripts/reporting/save-baseline.sh run1 &
-scripts/reporting/save-baseline.sh run2 &
+scripts/save-baseline.sh run1 &
+scripts/save-baseline.sh run2 &
 wait
 cat results/baselines/csv-reporter_baseline.json | jq .
 ```

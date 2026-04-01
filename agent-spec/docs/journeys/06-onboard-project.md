@@ -106,13 +106,13 @@ cp -a path/to/structured/.claude/* targets/my-project/configs/structured/
 ### 8. A/B test all configs
 
 ```bash
-scripts/tuning/parallel-invoke.sh my-project \
+scripts/parallel.sh my-project \
   --configs baseline,structured,hybrid \
   --model claude-haiku-4-5-20251001 --budget 0.50
 ```
 
 ```bash
-python3 scripts/reporting/report.py <id1> <id2> <id3> --group-by config
+python3 scripts/report.py <id1> <id2> <id3> --group-by config
 ```
 
 ### 9. Iterate on the best config

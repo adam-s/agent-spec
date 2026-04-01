@@ -36,16 +36,16 @@ All events are JSONL lines appended to `/tmp/agent-spec/{run_id}/events.jsonl`.
 
 ## Emitting
 
-- **Bash**: `source scripts/apc/lib.sh` then `apc_log LEVEL event "message" '{"key":"value"}'`
+- **Bash**: `source scripts/lib.sh` then `apc_log LEVEL event "message" '{"key":"value"}'`
 - **Python**: `from _apc import log; log("INFO", "event", "message", {"key": "value"})`
 - **TypeScript**: `import { log } from "./_apc"; log("INFO", "event", "message", { key: "value" })`
 
 ## Reading
 
-- Live: `scripts/cli/dashboard.sh <run_id>`
-- Tokens: `scripts/reporting/tokens.sh <run_id>`
-- Score: `scripts/reporting/score.sh <run_id>`
-- Resources: `scripts/reporting/resources.sh <run_id>`
-- Compare: `scripts/reporting/compare.sh <run_id> <run_id>`
-- Full report: `python3 scripts/reporting/report.py --all`
+- Live: `scripts/dashboard.sh <run_id>`
+- Tokens: `scripts/tokens.sh <run_id>`
+- Score: `scripts/score.sh <run_id>`
+- Resources: `scripts/resources.sh <run_id>`
+- Compare: `python3 scripts/report.py --compare <run_id> <run_id>`
+- Full report: `python3 scripts/report.py --all`
 - Raw: `jq 'select(.event=="token_update")' /tmp/agent-spec/{run_id}/events.jsonl`

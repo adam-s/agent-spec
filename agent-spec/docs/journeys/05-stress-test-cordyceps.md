@@ -33,16 +33,17 @@ scripts/run-eval.sh my-project tuned --inject targets/my-project/inject
 ### 3. Inject visual stimuli
 
 ```bash
-scripts/tuning/capture-wireframe.sh "https://example.com" /tmp/stimuli/wireframe-1.png
-scripts/tuning/parallel-invoke.sh my-project tuned --instances 3 \
+# capture-wireframe.sh has been removed; use external screenshot tools
+# Example: screenshot "https://example.com" > /tmp/stimuli/wireframe-1.png
+scripts/parallel.sh my-project tuned --instances 3 \
   --stimuli-dir /tmp/stimuli --keep
 ```
 
 ### 4. Config swap matrix
 
 ```bash
-scripts/tuning/parallel-invoke.sh my-project --configs baseline,tuned,empty
-python3 scripts/reporting/report.py <id1> <id2> <id3> --group-by config
+scripts/parallel.sh my-project --configs baseline,tuned,empty
+python3 scripts/report.py <id1> <id2> <id3> --group-by config
 ```
 
 ### 5. Empty .claude/ floor test
@@ -106,24 +107,26 @@ scripts/run-eval.sh my-project empty
 - [ ] Config with `rules/`, `skills/`, `agents/` subdirectories — all copied to sandbox .claude/
 - [ ] Swap logged as `config_swapped` event with config path
 
-### Screenshot capture (capture-wireframe.sh)
+### Screenshot capture (removed)
 
-- [ ] `capture-wireframe.sh <url> <output>` produces a PNG file
+capture-wireframe.sh has been removed. Screenshot capture is now handled by external tools. The following checklist items are retained for reference if screenshot support is re-added:
+
+- [ ] Screenshot tool produces a PNG file from a URL
 - [ ] Default viewport: 1280x800
-- [ ] Custom viewport: `capture-wireframe.sh <url> <out> 375 800` produces mobile-width
+- [ ] Custom viewport with width/height parameters
 - [ ] Output directory created automatically if missing
-- [ ] URL that 404s — screenshot shows error page (not script crash)
-- [ ] URL that times out (>30s) — script exits with error, not hang
+- [ ] URL that 404s — screenshot shows error page (not tool crash)
+- [ ] URL that times out (>30s) — tool exits with error, not hang
 - [ ] URL with redirect — follows redirect and screenshots final page
 - [ ] Output file with spaces in path — works correctly
-- [ ] Running capture-wireframe.sh 3 times in parallel — no Playwright conflicts
+- [ ] Running 3 screenshots in parallel — no Playwright conflicts
 
 ### Parallel resilience
 
 - [ ] 3 simultaneous cordyceps runs with different injections don't interfere
 - [ ] Each sandbox is isolated (injection in sandbox A doesn't appear in sandbox B)
 - [ ] Port collision: if one instance's server crashes, other instances unaffected
-- [ ] One instance taking 10x longer than others — parallel-invoke.sh waits for all
+- [ ] One instance taking 10x longer than others — parallel.sh waits for all
 - [ ] One instance crashing — other instances still complete and produce results
 - [ ] Manifest file contains all run_ids (even from crashed instances, if they got far enough)
 

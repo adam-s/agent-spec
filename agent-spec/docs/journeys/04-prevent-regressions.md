@@ -12,7 +12,7 @@ You have a working `.claude/` config. You want to make changes without breaking 
 
 ```bash
 scripts/run-eval.sh my-project tuned --model claude-haiku-4-5-20251001
-scripts/reporting/save-baseline.sh <run_id>
+scripts/save-baseline.sh <run_id>
 ```
 
 ### 2. Make changes, re-run, check
@@ -20,13 +20,13 @@ scripts/reporting/save-baseline.sh <run_id>
 ```bash
 # Edit configs/tuned/CLAUDE.md
 scripts/run-eval.sh my-project tuned --model claude-haiku-4-5-20251001
-scripts/reporting/check-regression.sh <new_run_id>
+scripts/check-regression.sh <new_run_id>
 ```
 
 ### 3. Compare
 
 ```bash
-python3 scripts/reporting/report.py --compare <baseline_id> <new_id>
+python3 scripts/report.py --compare <baseline_id> <new_id>
 ```
 
 ## Verification Checklist

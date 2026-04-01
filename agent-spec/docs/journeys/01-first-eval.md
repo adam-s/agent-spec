@@ -65,10 +65,10 @@ scripts/run-eval.sh my-project baseline
 ### 3. View results
 
 ```bash
-python3 scripts/reporting/report.py --latest
-scripts/cli/dashboard.sh <run_id>
-scripts/reporting/score.sh <run_id>
-scripts/reporting/tokens.sh <run_id>
+python3 scripts/report.py --latest
+scripts/dashboard.sh <run_id>
+scripts/score.sh <run_id>
+scripts/tokens.sh <run_id>
 ```
 
 ## Verification Checklist
@@ -90,8 +90,8 @@ scripts/reporting/tokens.sh <run_id>
 - [ ] Port allocated from 3100-3110 range
 - [ ] `__PORT__` in prompt.md replaced with allocated port number
 - [ ] `PORT` env var passed to verify.sh
-- [ ] `clear-ports.sh` runs before eval starts (no stale processes)
-- [ ] `clear-ports.sh` runs after eval completes (no orphaned servers)
+- [ ] `cleanup.sh` runs before eval starts (no stale processes)
+- [ ] `cleanup.sh` runs after eval completes (no orphaned servers)
 - [ ] If port 3100 is occupied, next free port (3101+) is allocated
 - [ ] Agent's produced code uses the allocated port (grep for hardcoded 3100)
 

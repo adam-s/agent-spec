@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # resources.sh — One-shot system resource snapshot as JSON.
 #
-# Usage: scripts/monitor/resources.sh
+# Usage: scripts/resources.sh
 # Output: JSON to stdout with cpu, mem, disk_free_gb
 set -euo pipefail
 

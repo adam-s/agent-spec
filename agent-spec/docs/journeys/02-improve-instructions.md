@@ -12,7 +12,7 @@ You have a target that passes with bare instructions, but you want to reduce cos
 
 ```bash
 scripts/run-eval.sh my-project baseline --model claude-haiku-4-5-20251001
-scripts/reporting/save-baseline.sh <run_id>
+scripts/save-baseline.sh <run_id>
 ```
 
 ### 2. Create a tuned config to iterate on
@@ -33,23 +33,23 @@ Edit `configs/tuned/CLAUDE.md` with initial instructions.
 Each pass: clean → launch → monitor → score → check regression → diagnose → fix → recurse.
 
 ```bash
-scripts/sandbox/clear-ports.sh
-scripts/tuning/parallel-invoke.sh my-project tuned --instances 3 \
+scripts/cleanup.sh
+scripts/parallel.sh my-project tuned --instances 3 \
   --model claude-haiku-4-5-20251001
 ```
 
 Monitor:
 
 ```bash
-scripts/cli/dashboard.sh <run_id> --summary
+scripts/dashboard.sh <run_id> --summary
 ```
 
 Score and compare:
 
 ```bash
-scripts/reporting/score.sh <run_id>
-scripts/reporting/check-regression.sh <run_id>
-python3 scripts/reporting/report.py <id1> <id2> <id3> --group-by config
+scripts/score.sh <run_id>
+scripts/check-regression.sh <run_id>
+python3 scripts/report.py <id1> <id2> <id3> --group-by config
 ```
 
 ## Verification Checklist
@@ -63,8 +63,8 @@ python3 scripts/reporting/report.py <id1> <id2> <id3> --group-by config
 - [ ] No sandbox directory name collisions across instances
 - [ ] All 3 instances use the same config (tuned)
 - [ ] All 3 instances use the same model
-- [ ] `parallel-invoke.sh` stdout prints exactly N run_ids (one per line)
-- [ ] `parallel-invoke.sh` stderr shows instance progress
+- [ ] `parallel.sh` stdout prints exactly N run_ids (one per line)
+- [ ] `parallel.sh` stderr shows instance progress
 - [ ] Manifest file created at `/tmp/agent-spec-parallel-{ts}.txt`
 - [ ] Manifest contains all run_ids
 - [ ] Exit code = number of failed instances (0 if all succeed)

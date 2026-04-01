@@ -7,7 +7,7 @@
 
 ## Before and After Every Run
 
-`scripts/sandbox/clear-ports.sh` runs automatically at the start and end of each `invoke.sh` run. It:
+`scripts/cleanup.sh` runs automatically at the start and end of each `invoke.sh` run (via the EXIT trap in `scripts/lib.sh`). It:
 1. Reads the PID registry for known port assignments
 2. Sweeps the reserved port ranges
 3. Stops orphaned Chromium/Patchright browser instances
@@ -24,4 +24,4 @@ Any verify.sh that starts a server MUST:
 
 `/tmp/agent-spec-pids.txt` — one line per process: `PID|PORT|PURPOSE`
 
-Track every background process with `scripts/sandbox/track-pid.sh <pid> <port> <purpose>`. The port field enables port-aware cleanup.
+Track every background process via the `apc_track_pid` function in `scripts/lib.sh`. The port field enables port-aware cleanup.

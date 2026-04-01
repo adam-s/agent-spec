@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # sidecar.sh — Background resource monitor that writes snapshots to APC.
 #
-# Usage: scripts/monitor/sidecar.sh [interval_seconds]
+# Usage: scripts/sidecar.sh [interval_seconds]
 # Runs until stopped. Start with & and track the PID.
 set -euo pipefail
 

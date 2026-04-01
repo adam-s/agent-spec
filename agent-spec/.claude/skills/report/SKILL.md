@@ -17,13 +17,13 @@ argument-hint: [run_id | --latest | --all]
 ```bash
 case "${1:---latest}" in
   --latest)
-    bash "$CLAUDE_PROJECT_DIR/scripts/cli/dashboard.sh" --latest --summary
+    bash "$CLAUDE_PROJECT_DIR/scripts/dashboard.sh" --latest --summary
     ;;
   --all)
-    python3 "$CLAUDE_PROJECT_DIR/scripts/reporting/report.py" --all
+    python3 "$CLAUDE_PROJECT_DIR/scripts/report.py" --all
     ;;
   *)
-    bash "$CLAUDE_PROJECT_DIR/scripts/cli/dashboard.sh" "$1" --summary
+    bash "$CLAUDE_PROJECT_DIR/scripts/dashboard.sh" "$1" --summary
     ;;
 esac
 ```

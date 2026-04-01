@@ -2,10 +2,10 @@
 # dashboard.sh — Live CLI dashboard for agent-spec runs.
 #
 # Usage:
-#   scripts/cli/dashboard.sh <run_id>              # Live tail
-#   scripts/cli/dashboard.sh --latest              # Most recent run
-#   scripts/cli/dashboard.sh <run_id> --summary    # One-shot summary
-#   scripts/cli/dashboard.sh <run_id> --events token_update,score
+#   scripts/dashboard.sh <run_id>              # Live tail
+#   scripts/dashboard.sh --latest              # Most recent run
+#   scripts/dashboard.sh <run_id> --summary    # One-shot summary
+#   scripts/dashboard.sh <run_id> --events token_update,score
 set -euo pipefail
 
 # Parse arguments
