@@ -7,7 +7,7 @@
 
 ## Before and After Every Run
 
-`scripts/cleanup.sh` runs automatically at the start and end of each `invoke.sh` run (via the EXIT trap in `scripts/lib.sh`). It:
+`scripts/cleanup.py` runs automatically at the start and end of each `invoke.py` run (via the EXIT trap in `scripts/lib.sh`). It:
 1. Reads the PID registry for known port assignments
 2. Sweeps the reserved port ranges
 3. Stops orphaned Chromium/Patchright browser instances

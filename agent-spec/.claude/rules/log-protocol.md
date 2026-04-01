@@ -42,9 +42,9 @@ All events are JSONL lines appended to `/tmp/agent-spec/{run_id}/events.jsonl`.
 
 ## Reading
 
-- Live: `scripts/dashboard.sh <run_id>`
-- Tokens: `scripts/tokens.sh <run_id>`
-- Score: `scripts/score.sh <run_id>`
+- Live: `scripts/dashboard.py <run_id>`
+- Tokens: `scripts/tokens.py <run_id>`
+- Score: `scripts/score.py <run_id>`
 - Resources: `scripts/resources.sh <run_id>`
 - Compare: `python3 scripts/report.py --compare <run_id> <run_id>`
 - Full report: `python3 scripts/report.py --all`

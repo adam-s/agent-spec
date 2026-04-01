@@ -30,7 +30,7 @@ PROMPT_FILE="$TARGET_DIR/prompt.md"
 VERIFY_FILE="$TARGET_DIR/verify.sh"
 
 # Call invoke.sh
-bash "$CLAUDE_PROJECT_DIR/scripts/invoke.sh" \
+python3 "$CLAUDE_PROJECT_DIR/scripts/invoke.py" \
   "$(cd "$TARGET_DIR" && python3 -c "import yaml; print(yaml.safe_load(open('target.yaml'))['source'])" 2>/dev/null || grep 'source:' "$TARGET_DIR/target.yaml" | awk '{print $2}')" \
   "$CONFIG_DIR" \
   "$PROMPT_FILE" \
@@ -51,5 +51,5 @@ Since invoke.sh handles sandbox creation internally, you need to:
 4. After completion, show the dashboard summary:
 
 ```bash
-bash "$CLAUDE_PROJECT_DIR/scripts/dashboard.sh" --latest --summary
+python3 "$CLAUDE_PROJECT_DIR/scripts/dashboard.py" --latest --summary
 ```

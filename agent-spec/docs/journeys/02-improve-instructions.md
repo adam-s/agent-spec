@@ -11,8 +11,8 @@ You have a target that passes with bare instructions, but you want to reduce cos
 ### 1. Establish the starting point
 
 ```bash
-scripts/run-eval.sh my-project baseline --model claude-haiku-4-5-20251001
-scripts/save-baseline.sh <run_id>
+python3 scripts/run_eval.py my-project baseline --model claude-haiku-4-5-20251001
+python3 scripts/save_baseline.py <run_id>
 ```
 
 ### 2. Create a tuned config to iterate on
@@ -33,22 +33,22 @@ Edit `configs/tuned/CLAUDE.md` with initial instructions.
 Each pass: clean → launch → monitor → score → check regression → diagnose → fix → recurse.
 
 ```bash
-scripts/cleanup.sh
-scripts/parallel.sh my-project tuned --instances 3 \
+python3 scripts/cleanup.py
+python3 scripts/parallel.py my-project tuned --instances 3 \
   --model claude-haiku-4-5-20251001
 ```
 
 Monitor:
 
 ```bash
-scripts/dashboard.sh <run_id> --summary
+python3 scripts/dashboard.py <run_id> --summary
 ```
 
 Score and compare:
 
 ```bash
-scripts/score.sh <run_id>
-scripts/check-regression.sh <run_id>
+python3 scripts/score.py <run_id>
+python3 scripts/check_regression.py <run_id>
 python3 scripts/report.py <id1> <id2> <id3> --group-by config
 ```
 

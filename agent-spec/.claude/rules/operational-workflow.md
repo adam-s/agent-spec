@@ -18,17 +18,17 @@ Every common operation has a script or skill. Before writing any bash to sandbox
 
 | Script | When to use |
 | ------ | ----------- |
-| `scripts/run-eval.sh <target> [config]` | Run one eval by target name |
-| `scripts/invoke.sh <source> <config> <prompt>` | Low-level: sandbox + agent + verify |
-| `scripts/parallel.sh <target> --configs a,b` | A/B test configs in parallel |
-| `scripts/parallel.sh <target> --models x,y` | Benchmark models in parallel |
-| `scripts/parallel.sh <target> --instances N` | N reps of same config |
-| `scripts/dashboard.sh <run_id>` | Monitor a run (live or summary) |
-| `scripts/dashboard.sh --latest` | Monitor most recent run |
+| `scripts/run_eval.py <target> [config]` | Run one eval by target name |
+| `scripts/invoke.py <source> <config> <prompt>` | Low-level: sandbox + agent + verify |
+| `scripts/parallel.py <target> --configs a,b` | A/B test configs in parallel |
+| `scripts/parallel.py <target> --models x,y` | Benchmark models in parallel |
+| `scripts/parallel.py <target> --instances N` | N reps of same config |
+| `scripts/dashboard.py <run_id>` | Monitor a run (live or summary) |
+| `scripts/dashboard.py --latest` | Monitor most recent run |
 | `scripts/report.py --all` | Full report across all runs |
 | `scripts/report.py --all --group-by config` | Compare configs with deltas |
 | `scripts/report.py --all --group-by model` | Compare models with deltas |
-| `scripts/cleanup.sh` | Full state reset (ports, sandboxes, PIDs) |
+| `scripts/cleanup.py` | Full state reset (ports, sandboxes, PIDs) |
 
 ## Config resolution
 
@@ -42,19 +42,19 @@ Shared configs: baseline, token-efficient, structured, workflow, hybrid, drona23
 
 ### One-shot eval
 1. `/run-eval target config`
-2. `scripts/dashboard.sh --latest --summary`
+2. `python3 scripts/dashboard.py --latest --summary`
 
 ### A/B test configs
-1. `scripts/parallel.sh target --configs baseline,tuned --model haiku`
+1. `python3 scripts/parallel.py target --configs baseline,tuned --model haiku`
 2. `python3 scripts/report.py <ids> --group-by config`
 
 ### Model benchmark
-1. `scripts/parallel.sh target baseline --models haiku,sonnet`
+1. `python3 scripts/parallel.py target baseline --models haiku,sonnet`
 2. `python3 scripts/report.py <ids> --group-by model`
 
 ### After any failure or stuck state
 1. `/stop` — clears everything
-2. `scripts/dashboard.sh <run_id> --summary` — see what happened
+2. `python3 scripts/dashboard.py <run_id> --summary` — see what happened
 3. `cat /tmp/agent-spec/<run_id>/stderr.log` — agent stderr
 
 ### Adding a new target

@@ -59,16 +59,16 @@ A coding project.
 ### 2. Run the eval
 
 ```bash
-scripts/run-eval.sh my-project baseline
+python3 scripts/run_eval.py my-project baseline
 ```
 
 ### 3. View results
 
 ```bash
 python3 scripts/report.py --latest
-scripts/dashboard.sh <run_id>
-scripts/score.sh <run_id>
-scripts/tokens.sh <run_id>
+python3 scripts/dashboard.py <run_id>
+python3 scripts/score.py <run_id>
+python3 scripts/tokens.py <run_id>
 ```
 
 ## Verification Checklist

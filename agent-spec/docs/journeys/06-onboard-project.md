@@ -106,7 +106,7 @@ cp -a path/to/structured/.claude/* targets/my-project/configs/structured/
 ### 8. A/B test all configs
 
 ```bash
-scripts/parallel.sh my-project \
+python3 scripts/parallel.py my-project \
   --configs baseline,structured,hybrid \
   --model claude-haiku-4-5-20251001 --budget 0.50
 ```
@@ -125,7 +125,7 @@ python3 scripts/report.py <id1> <id2> <id3> --group-by config
 
 The predecessor project (testing-claude-agent) used:
 - Git worktrees for isolation → agent-spec uses `/tmp` sandboxes
-- `scripts/run-agent.sh` → agent-spec uses `scripts/run-eval.sh`
+- `scripts/run-agent.sh` → agent-spec uses `scripts/run_eval.py`
 - `configs/A-baseline/` through `configs/F-drona23/` → agent-spec uses `targets/{name}/configs/`
 - `challenges/` with seed files and tests → agent-spec uses source repos with `delete_before_run`
 - Manual `report.py` → agent-spec has `report.py --group-by config` with deltas

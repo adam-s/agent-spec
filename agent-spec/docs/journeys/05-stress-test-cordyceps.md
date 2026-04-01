@@ -19,7 +19,7 @@ delete_before_run:
 ```
 
 ```bash
-scripts/run-eval.sh my-project tuned
+python3 scripts/run_eval.py my-project tuned
 ```
 
 ### 2. Inject misleading files
@@ -27,7 +27,7 @@ scripts/run-eval.sh my-project tuned
 ```bash
 mkdir -p targets/my-project/inject
 echo '{"wrong": "data"}' > targets/my-project/inject/config.json
-scripts/run-eval.sh my-project tuned --inject targets/my-project/inject
+python3 scripts/run_eval.py my-project tuned --inject targets/my-project/inject
 ```
 
 ### 3. Inject visual stimuli
@@ -35,14 +35,14 @@ scripts/run-eval.sh my-project tuned --inject targets/my-project/inject
 ```bash
 # capture-wireframe.sh has been removed; use external screenshot tools
 # Example: screenshot "https://example.com" > /tmp/stimuli/wireframe-1.png
-scripts/parallel.sh my-project tuned --instances 3 \
+python3 scripts/parallel.py my-project tuned --instances 3 \
   --stimuli-dir /tmp/stimuli --keep
 ```
 
 ### 4. Config swap matrix
 
 ```bash
-scripts/parallel.sh my-project --configs baseline,tuned,empty
+python3 scripts/parallel.py my-project --configs baseline,tuned,empty
 python3 scripts/report.py <id1> <id2> <id3> --group-by config
 ```
 
@@ -51,7 +51,7 @@ python3 scripts/report.py <id1> <id2> <id3> --group-by config
 ```bash
 mkdir -p targets/my-project/configs/empty
 touch targets/my-project/configs/empty/CLAUDE.md
-scripts/run-eval.sh my-project empty
+python3 scripts/run_eval.py my-project empty
 ```
 
 ## Verification Checklist

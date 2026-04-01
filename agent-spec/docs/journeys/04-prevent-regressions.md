@@ -11,16 +11,16 @@ You have a working `.claude/` config. You want to make changes without breaking 
 ### 1. Establish the baseline
 
 ```bash
-scripts/run-eval.sh my-project tuned --model claude-haiku-4-5-20251001
-scripts/save-baseline.sh <run_id>
+python3 scripts/run_eval.py my-project tuned --model claude-haiku-4-5-20251001
+python3 scripts/save_baseline.py <run_id>
 ```
 
 ### 2. Make changes, re-run, check
 
 ```bash
 # Edit configs/tuned/CLAUDE.md
-scripts/run-eval.sh my-project tuned --model claude-haiku-4-5-20251001
-scripts/check-regression.sh <new_run_id>
+python3 scripts/run_eval.py my-project tuned --model claude-haiku-4-5-20251001
+python3 scripts/check_regression.py <new_run_id>
 ```
 
 ### 3. Compare

@@ -34,7 +34,7 @@ Runs log structured JSONL events to `/tmp/agent-spec/{run_id}/events.jsonl`.
 
 > To watch live, run in another terminal:
 > `tail -f /tmp/agent-spec-parallel-out-*.log`
-> or: `scripts/dashboard.sh --latest`
+> or: `python3 scripts/dashboard.py --latest`
 
 Then use `run_in_background` for the actual run and let the system notify you when it completes.
 
@@ -42,15 +42,15 @@ Then use `run_in_background` for the actual run and let the system notify you wh
 
 ```bash
 # Watch a run live (color-coded, formatted)
-scripts/dashboard.sh <run_id>
-scripts/dashboard.sh --latest
+python3 scripts/dashboard.py <run_id>
+python3 scripts/dashboard.py --latest
 
 # Watch all parallel runs at once
 tail -f /tmp/agent-spec-parallel-out-*.log
 
 # Diagnose a failed run
 cat /tmp/agent-spec/<run_id>/stderr.log
-scripts/dashboard.sh <run_id> --summary
+python3 scripts/dashboard.py <run_id> --summary
 ```
 
 See @.claude/rules/log-protocol.md for the full event schema and all reading tools.

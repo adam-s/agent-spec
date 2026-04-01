@@ -57,14 +57,14 @@ RECURSE:
     RETURN with summary: "Max depth reached. Best results: ..."
 
   1. CLEAN
-     bash scripts/cleanup.sh
+     python3 scripts/cleanup.py
 
   2. PREPARE STIMULI (if any)
      # capture-wireframe.sh has been removed; use external screenshot tools if needed
      These get injected via --stimuli-dir.
 
   3. LAUNCH
-     bash scripts/parallel.sh <target> <config> \
+     python3 scripts/parallel.py <target> <config> \
        --instances N [--stimuli-dir <path>] [--keep]
      Collect run IDs from stdout.
 
@@ -75,20 +75,20 @@ RECURSE:
        --models haiku,sonnet
 
   4. MONITOR (every 60s)
-     bash scripts/dashboard.sh <run_id> --summary
+     python3 scripts/dashboard.py <run_id> --summary
      Build a monitoring table. Stop early if agent is stuck.
 
   5. SCORE
-     bash scripts/score.sh <run_id>
+     python3 scripts/score.py <run_id>
      python3 scripts/report.py <run_id1> <run_id2> ... --group-by config
 
      For two-run comparison:
        python3 scripts/report.py --compare <id1> <id2>
 
   6. REGRESSION CHECK
-     bash scripts/check-regression.sh <run_id>
+     python3 scripts/check_regression.py <run_id>
      If first iteration, save baseline:
-       bash scripts/save-baseline.sh <run_id>
+       python3 scripts/save_baseline.py <run_id>
 
   7. STOP CONDITION CHECK
      if all instances PASS and no regressions:

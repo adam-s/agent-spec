@@ -11,7 +11,7 @@ You have two instruction variants and want to know which is better. Or you want 
 ### 1. A/B test two configs
 
 ```bash
-scripts/parallel.sh my-project --configs baseline,tuned \
+python3 scripts/parallel.py my-project --configs baseline,tuned \
   --model claude-haiku-4-5-20251001 --budget 0.50
 ```
 
@@ -25,14 +25,14 @@ python3 scripts/report.py <baseline_id> <tuned_id> --group-by config
 ### 3. Benchmark two models
 
 ```bash
-scripts/parallel.sh my-project tuned \
+python3 scripts/parallel.py my-project tuned \
   --models claude-haiku-4-5-20251001,claude-sonnet-4-6 --budget 1.00
 ```
 
 ### 4. Full matrix
 
 ```bash
-scripts/parallel.sh my-project \
+python3 scripts/parallel.py my-project \
   --configs baseline,tuned \
   --models claude-haiku-4-5-20251001,claude-sonnet-4-6 \
   --budget 1.00

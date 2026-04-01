@@ -63,7 +63,7 @@ Failed: N
 ### Attack: Port exhaustion
 Target: Journey 3 — "Port range 3100-3110 supports up to 11 simultaneous runs"
 ```bash
-scripts/parallel.sh csv-reporter --instances 12 \
+python3 scripts/parallel.py csv-reporter --instances 12 \
   --model claude-haiku-4-5-20251001 --budget 0.10
 ```
 Expected: 11 succeed, 12th gets error or waits. Not: silent port collision.
@@ -72,7 +72,7 @@ Expected: 11 succeed, 12th gets error or waits. Not: silent port collision.
 Target: Journey 4 — "Baseline file exists but is corrupt JSON"
 ```bash
 echo "not json" > results/baselines/csv-reporter_baseline.json
-scripts/check-regression.sh <some_run_id>
+python3 scripts/check_regression.py <some_run_id>
 ```
 Expected: error message. Not: Python traceback.
 
@@ -81,7 +81,7 @@ Target: Journey 5 — "Injecting a .claude/CLAUDE.md — does it survive the swa
 ```bash
 mkdir -p /tmp/inject-test/.claude
 echo "INJECTED" > /tmp/inject-test/.claude/CLAUDE.md
-scripts/run-eval.sh csv-reporter baseline --inject /tmp/inject-test
+python3 scripts/run_eval.py csv-reporter baseline --inject /tmp/inject-test
 ```
 Expected: swap replaces it. Verify sandbox .claude/CLAUDE.md says "A coding project." not "INJECTED".
 
@@ -90,15 +90,15 @@ Target: Journey 1 — "Source repo with spaces in path works correctly"
 ```bash
 cp -a ../csv-reporter "/tmp/my project with spaces"
 # Modify target.yaml source to point to "/tmp/my project with spaces"
-scripts/run-eval.sh csv-reporter baseline
+python3 scripts/run_eval.py csv-reporter baseline
 ```
 Expected: sandbox created, eval runs. Not: bash word-splitting errors.
 
 ### Attack: Simultaneous save-baseline
 Target: Journey 4 — "Two users save baselines simultaneously"
 ```bash
-scripts/save-baseline.sh run1 &
-scripts/save-baseline.sh run2 &
+python3 scripts/save_baseline.py run1 &
+python3 scripts/save_baseline.py run2 &
 wait
 cat results/baselines/csv-reporter_baseline.json | jq .
 ```

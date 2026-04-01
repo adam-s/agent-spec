@@ -51,7 +51,7 @@ Agents run with a 10-minute timeout by default (configurable via `TIMEOUT` env v
 
 ## Cleanup
 
-invoke.sh uses an EXIT trap that automatically stops the sidecar, clears ports, and removes the sandbox on any exit (success, failure, or signal). Manual cleanup with `/stop` is only needed if the trap itself is bypassed (e.g., SIGKILL).
+invoke.py uses an EXIT trap that automatically stops the sidecar, clears ports, and removes the sandbox on any exit (success, failure, or signal). Manual cleanup with `/stop` is only needed if the trap itself is bypassed (e.g., SIGKILL).
 
 ## Bug Catalog
 
