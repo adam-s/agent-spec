@@ -244,20 +244,9 @@ if [[ -n "$VERIFY" ]]; then
   fi
 fi
 
-# ── Phase 7: ARCHIVE ────────────────────────────────────────────
+# ── Phase 7: ARCHIVE (handled by EXIT trap via _archive_run) ────
 
 echo ""
-echo "=== Archiving ==="
-while IFS= read -r f; do
-  [[ -z "$f" ]] && continue
-  mkdir -p "$RESULTS_DIR/produced/$(dirname "$f")"
-  cp "$SANDBOX/$f" "$RESULTS_DIR/produced/$f" && echo "  Saved: $f"
-done < <(cd "$SANDBOX" && find . -maxdepth 3 \( -name '*.py' -o -name '*.js' -o -name '*.ts' \) \
-  ! -path '*/node_modules/*' ! -name '_apc.*' 2>/dev/null)
-
-for artifact in events.jsonl output.json stderr.log; do
-  [[ -f "$RUN_DIR/$artifact" ]] && cp "$RUN_DIR/$artifact" "$RESULTS_DIR/"
-done
 echo "  Results: $RESULTS_DIR/"
 
 # ── Summary ──────────────────────────────────────────────────────

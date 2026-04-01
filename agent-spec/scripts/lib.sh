@@ -114,7 +114,36 @@ _handle_signal() {
   exit 1
 }
 
+_archive_run() {
+  # Archive logs from /tmp to results/ — runs on ANY exit so data survives.
+  # Globals: RUN_DIR, RESULTS_DIR, _CLEANUP_SANDBOX (set by invoke.sh)
+  local run_dir="${RUN_DIR:-}"
+  local results_dir="${RESULTS_DIR:-}"
+  local sandbox="${_CLEANUP_SANDBOX:-}"
+
+  [[ -z "$results_dir" ]] && return 0
+  mkdir -p "$results_dir"
+
+  # Archive run logs
+  for artifact in events.jsonl output.json stderr.log; do
+    [[ -f "$run_dir/$artifact" ]] && cp "$run_dir/$artifact" "$results_dir/" 2>/dev/null
+  done
+
+  # Archive produced files from sandbox (if it still exists)
+  if [[ -n "$sandbox" ]] && [[ -d "$sandbox" ]]; then
+    while IFS= read -r f; do
+      [[ -z "$f" ]] && continue
+      mkdir -p "$results_dir/produced/$(dirname "$f")"
+      cp "$sandbox/$f" "$results_dir/produced/$f" 2>/dev/null
+    done < <(cd "$sandbox" && find . -maxdepth 3 \( -name '*.py' -o -name '*.js' -o -name '*.ts' \) \
+      ! -path '*/node_modules/*' ! -name '_apc.*' 2>/dev/null)
+  fi
+}
+
 _do_cleanup() {
+  # Archive first, then clean up
+  _archive_run
+
   # Stop sidecar
   if [[ -n "$_CLEANUP_SIDECAR_PID" ]]; then
     kill "$_CLEANUP_SIDECAR_PID" 2>/dev/null || true
