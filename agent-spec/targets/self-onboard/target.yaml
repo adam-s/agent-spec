@@ -1,0 +1,11 @@
+name: self-onboard
+source: ../../
+verify: verify.sh
+
+setup:
+  - mkdir -p /tmp/agent-spec-sample-app
+  - cp targets/self-onboard/inject/sample-app/* /tmp/agent-spec-sample-app/
+
+agent:
+  model: claude-sonnet-4-6
+  budget: 2.00
