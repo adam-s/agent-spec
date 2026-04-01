@@ -189,14 +189,6 @@ def main():
                 apc_log("INFO", "instance_complete", f"Instance {i} passed",
                         {"instance": i, "run_id": run_id, "result": result_line,
                          "exit_code": exit_code})
-                print(f"  --- Failure log (last 15 lines) ---", file=sys.stderr)
-                try:
-                    lines = Path(log_file).read_text().splitlines()
-                    for line in lines[-15:]:
-                        print(f"    {line}", file=sys.stderr)
-                except FileNotFoundError:
-                    pass
-                print(f"  --- end ---", file=sys.stderr)
         else:
             print(f"  Instance {i}: exit={exit_code} (no run_id)", file=sys.stderr)
             apc_log("ERROR", "instance_failed", f"Instance {i} crashed (no run_id)",
