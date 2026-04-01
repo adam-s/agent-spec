@@ -26,9 +26,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from lib import (
-    PROJECT_DIR, SCRIPTS_DIR, PORT_MIN, PORT_MAX,
+    PROJECT_DIR, SCRIPTS_DIR, PORT_MIN, PORT_MAX, RUN_ROOT,
     die, require_dir, apc_log, now_ms,
     list_targets, list_configs, get_baseline_cost,
+    load_events, get_event,
     StatusLine, _color, GREEN, RED, RESET, DIM, BOLD, _IS_TTY,
 )
 
@@ -53,6 +54,19 @@ def _parse_log_for_result(log_file: str) -> tuple[str | None, str, float]:
             cost = float(cm[-1])
     except FileNotFoundError:
         pass
+
+    # Read authoritative score and cost from events.jsonl when available
+    if run_id:
+        events_file = RUN_ROOT / run_id / "events.jsonl"
+        if events_file.exists():
+            events = load_events(events_file)
+            score = get_event(events, "score")
+            if score:
+                result = score["data"].get("result", result)
+            token = get_event(events, "token_update")
+            if token:
+                cost = token["data"].get("cost_usd", cost)
+
     return run_id, result, cost
 
 
