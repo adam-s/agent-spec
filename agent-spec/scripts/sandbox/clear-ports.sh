@@ -24,6 +24,7 @@ if [[ -f "$PID_FILE" ]]; then
       fi
     fi
   done < "$PID_FILE"
+  : > "$PID_FILE"  # Truncate after processing
 fi
 
 # 2. Sweep known test port ranges (3100-3110 for targets, 4000-4100 for agent-chosen ports)

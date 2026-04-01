@@ -38,6 +38,7 @@ def load_events(path):
         if ev == "agent_started":
             data["target"] = e["data"].get("target", "?")
             data["config"] = e["data"].get("config", "?")
+            data["model"] = e["data"].get("model", "?")
         elif ev == "token_update":
             data["tokens"] = e["data"]
         elif ev == "score":
@@ -58,6 +59,12 @@ try:
 except (json.JSONDecodeError, ValueError) as e:
     print(f"CORRUPT BASELINE at {baseline_path}: {e}")
     sys.exit(1)
+
+# Warn on model mismatch
+b_model = baseline.get("model", "?")
+c_model = current.get("model", "?")  # not currently stored in events, future-proofing
+if b_model != "?" and c_model != "?" and b_model != c_model:
+    print(f"  WARNING: Model mismatch — baseline used {b_model}, current used {c_model}")
 
 regressions = []
 
