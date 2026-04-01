@@ -209,3 +209,196 @@ def get_event(events: list[dict], event_name: str) -> dict | None:
 
 def now_ms() -> int:
     return int(time.time() * 1000)
+
+
+# ── Discovery ───────────────────────────────────────────────────
+
+def list_targets() -> list[str]:
+    """Return sorted list of target names (directories with target.yaml)."""
+    targets_dir = PROJECT_DIR / "targets"
+    if not targets_dir.is_dir():
+        return []
+    return sorted(
+        d.name for d in targets_dir.iterdir()
+        if d.is_dir() and not d.name.startswith("_") and (d / "target.yaml").exists()
+    )
+
+
+def list_configs(target_name: str) -> list[str]:
+    """Return sorted list of config names for a target (target-specific + shared)."""
+    targets_dir = PROJECT_DIR / "targets"
+    configs = set()
+
+    # Target-specific
+    tc = targets_dir / target_name / "configs"
+    if tc.is_dir():
+        configs.update(d.name for d in tc.iterdir() if d.is_dir())
+
+    # Shared
+    sc = targets_dir / "_shared" / "configs"
+    if sc.is_dir():
+        configs.update(d.name for d in sc.iterdir() if d.is_dir())
+
+    return sorted(configs)
+
+
+# ── ANSI Colors ─────────────────────────────────────────────────
+
+RESET = "\033[0m"
+BOLD = "\033[1m"
+DIM = "\033[90m"
+RED = "\033[31m"
+GREEN = "\033[32m"
+YELLOW = "\033[33m"
+CYAN = "\033[36m"
+
+_IS_TTY = sys.stderr.isatty()
+
+def _color(code: str, text: str) -> str:
+    return f"{code}{text}{RESET}" if _IS_TTY else text
+
+
+# ── Output ──────────────────────────────────────────────────────
+
+def print_result_line(target: str, config: str, result: str,
+                      duration_s: float | None = None, cost_usd: float | None = None):
+    """Print a standardized one-line result summary."""
+    if result == "PASS":
+        icon = _color(GREEN, "\u2713")
+        result_str = _color(GREEN, result)
+    elif result == "FAIL":
+        icon = _color(RED, "\u2717")
+        result_str = _color(RED, result)
+    else:
+        icon = "?"
+        result_str = result
+    line = f"  {icon} {target}/{config}: {result_str}"
+    if duration_s is not None:
+        line += f"  ({duration_s:.0f}s)"
+    if cost_usd is not None:
+        line += f"  ${cost_usd:.2f}"
+    print(line)
+
+
+# ── Baseline Cost ───────────────────────────────────────────────
+
+def get_baseline_cost(target: str, config: str, max_runs: int = 10) -> float | None:
+    """Return median cost of recent runs for this target/config."""
+    if not RUN_ROOT.exists():
+        return None
+    costs = []
+    dirs = sorted(RUN_ROOT.iterdir(), key=lambda d: d.stat().st_mtime, reverse=True)
+    for d in dirs[:50]:
+        events_file = d / "events.jsonl"
+        if not events_file.exists():
+            continue
+        events = load_events(events_file)
+        started = get_event(events, "agent_started")
+        if not started:
+            continue
+        data = started.get("data", {})
+        if data.get("target") == target and data.get("config") == config:
+            token = get_event(events, "token_update")
+            if token:
+                costs.append(token["data"].get("cost_usd", 0))
+                if len(costs) >= max_runs:
+                    break
+    if not costs:
+        return None
+    costs.sort()
+    mid = len(costs) // 2
+    return costs[mid] if len(costs) % 2 else (costs[mid - 1] + costs[mid]) / 2
+
+
+# ── Live Status ─────────────────────────────────────────────────
+
+_SPINNER = ["\u280b", "\u2819", "\u2838", "\u2830", "\u2826", "\u2807"]
+
+
+class StatusLine:
+    """In-place updating status line for terminal output."""
+
+    def __init__(self, label: str, budget: float | None = None,
+                 baseline_cost: float | None = None):
+        self.label = label
+        self.budget = budget
+        self.baseline_cost = baseline_cost
+        self.start = time.time()
+        self.cost = 0.0
+        self.tokens_in = 0
+        self.tokens_out = 0
+        self.finished = False
+        self._is_tty = sys.stderr.isatty()
+        self._tick = 0
+        self._last_print_time = 0.0
+
+    def update(self, cost: float = 0.0, tokens_in: int = 0, tokens_out: int = 0):
+        """Update metrics and rewrite the status line."""
+        if self.finished:
+            return
+        if cost:
+            self.cost = cost
+        if tokens_in:
+            self.tokens_in = tokens_in
+        if tokens_out:
+            self.tokens_out = tokens_out
+
+        now = time.time()
+        if self._is_tty:
+            self._tick += 1
+            spinner = _SPINNER[self._tick % len(_SPINNER)]
+            line = self._render(spinner)
+            print(f"\r{line}\033[K", end="", file=sys.stderr, flush=True)
+        else:
+            # Non-TTY: print a line every 30s
+            if now - self._last_print_time >= 30:
+                self._last_print_time = now
+                elapsed = now - self.start
+                parts = [f"  {self.label}: {elapsed:.0f}s"]
+                if self.cost:
+                    parts.append(f"${self.cost:.2f}")
+                print("  ".join(parts), file=sys.stderr)
+
+    def finish(self, result: str, cost: float | None = None,
+               duration_s: float | None = None):
+        """Print the final result line."""
+        if self.finished:
+            return
+        self.finished = True
+        if cost is not None:
+            self.cost = cost
+        if duration_s is None:
+            duration_s = time.time() - self.start
+
+        if result == "PASS":
+            icon = _color(GREEN, "\u2713")
+            result_str = _color(GREEN, result)
+        elif result == "FAIL":
+            icon = _color(RED, "\u2717")
+            result_str = _color(RED, result)
+        else:
+            icon = "?"
+            result_str = result
+
+        line = f"  {icon} {self.label}: {result_str}  ({duration_s:.0f}s)"
+        if self.cost:
+            line += f"  ${self.cost:.2f}"
+
+        if self._is_tty:
+            print(f"\r{line}\033[K", file=sys.stderr)
+        else:
+            print(line, file=sys.stderr)
+
+    def _render(self, spinner: str) -> str:
+        elapsed = time.time() - self.start
+        line = f"  {spinner} {self.label}  {elapsed:.0f}s"
+        if self.cost:
+            line += f"  ${self.cost:.2f}"
+            if self.budget:
+                line += f" / ${self.budget:.2f}"
+            if self.baseline_cost and self.cost > self.baseline_cost * 2:
+                warn = _color(YELLOW, f"\u26a0 {self.cost/self.baseline_cost:.1f}x baseline")
+                line += f"  {warn}"
+        elif self.budget:
+            line += f"  $0.00 / ${self.budget:.2f}"
+        return line

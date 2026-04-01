@@ -9,6 +9,7 @@ Usage:
   python3 scripts/dashboard.py --diff <id1> <id2>    # Config diff between two runs
   python3 scripts/dashboard.py --parallel <id>       # Multi-instance status table
 """
+import argparse
 import json
 import os
 import re
@@ -18,16 +19,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from lib import RUN_ROOT, load_events, get_event
-
-# ANSI colors
-RESET = "\033[0m"
-BOLD = "\033[1m"
-DIM = "\033[90m"
-RED = "\033[31m"
-GREEN = "\033[32m"
-YELLOW = "\033[33m"
-CYAN = "\033[36m"
+from lib import RUN_ROOT, load_events, get_event, RESET, BOLD, DIM, RED, GREEN, YELLOW, CYAN
 
 LEVEL_COLORS = {"ERROR": RED, "WARN": YELLOW, "METRIC": CYAN, "INFO": GREEN, "DEBUG": DIM}
 
@@ -321,54 +313,38 @@ def print_parallel_status(parallel_id: str):
     print()
 
 
-def main():
-    run_id = None
-    summary = False
-    stream = False
-    diff_ids = None
-    parallel_id = None
-
-    args = sys.argv[1:]
-    i = 0
-    while i < len(args):
-        arg = args[i]
-        if arg == "--latest":
-            dirs = sorted(Path(RUN_ROOT).iterdir(), key=lambda d: d.stat().st_mtime, reverse=True) \
-                if RUN_ROOT.exists() else []
-            if not dirs:
-                print("No runs found", file=sys.stderr); sys.exit(1)
-            run_id = dirs[0].name
-        elif arg == "--summary":
-            summary = True
-        elif arg == "--stream":
-            stream = True
-        elif arg == "--diff":
-            if i + 2 >= len(args):
-                print("Usage: --diff <run_id1> <run_id2>", file=sys.stderr); sys.exit(1)
-            diff_ids = (args[i + 1], args[i + 2])
-            i += 2
-        elif arg == "--parallel":
-            if i + 1 >= len(args):
-                print("Usage: --parallel <parallel_run_id>", file=sys.stderr); sys.exit(1)
-            parallel_id = args[i + 1]
-            i += 1
-        else:
-            run_id = arg
-        i += 1
+def main(args=None):
+    parser = argparse.ArgumentParser(
+        prog="dashboard",
+        description="CLI dashboard for agent-spec runs",
+    )
+    parser.add_argument("run_id", nargs="?", help="Run ID to display")
+    parser.add_argument("--latest", action="store_true", help="Show most recent run")
+    parser.add_argument("--summary", action="store_true", help="One-shot summary (no live tail)")
+    parser.add_argument("--stream", action="store_true", help="Compact one-line-per-event, no color")
+    parser.add_argument("--diff", nargs=2, metavar="RUN_ID", help="Config diff between two runs")
+    parser.add_argument("--parallel", metavar="PARALLEL_ID", help="Multi-instance status table")
+    args = args or parser.parse_args()
 
     # Dispatch to special modes
-    if diff_ids:
-        print_diff(diff_ids[0], diff_ids[1])
+    if args.diff:
+        print_diff(args.diff[0], args.diff[1])
         return
 
-    if parallel_id:
-        print_parallel_status(parallel_id)
+    if args.parallel:
+        print_parallel_status(args.parallel)
         return
+
+    run_id = args.run_id
+    if args.latest:
+        dirs = sorted(Path(RUN_ROOT).iterdir(), key=lambda d: d.stat().st_mtime, reverse=True) \
+            if RUN_ROOT.exists() else []
+        if not dirs:
+            print("No runs found", file=sys.stderr); sys.exit(1)
+        run_id = dirs[0].name
 
     if not run_id:
-        print("Usage: dashboard.py <run_id> | --latest [--summary] [--stream]", file=sys.stderr)
-        print("       dashboard.py --diff <id1> <id2>", file=sys.stderr)
-        print("       dashboard.py --parallel <parallel_id>", file=sys.stderr)
+        parser.print_help()
         sys.exit(1)
 
     log_path = RUN_ROOT / run_id / "events.jsonl"
@@ -376,11 +352,11 @@ def main():
         print(f"No events found: {log_path}", file=sys.stderr)
         sys.exit(1)
 
-    if stream:
+    if args.stream:
         events = load_events(log_path)
         for e in events:
             print(format_stream(e))
-    elif summary:
+    elif args.summary:
         events = load_events(log_path)
         print_summary(run_id, events)
     else:

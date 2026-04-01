@@ -12,6 +12,7 @@ Usage:
   report.py --session <session_id>         Iterate session report grouped by depth
 """
 
+import argparse
 import json
 import os
 import sys
@@ -257,53 +258,39 @@ def print_session_report(session_id: str):
         print(f"  Total cost: ${total_cost:.3f}")
 
 
-def main():
-    if len(sys.argv) < 2:
-        print("Usage: report.py <run_id> ... | --all | --latest | --compare <id1> <id2> | --all --group-by <field>",
-              file=sys.stderr)
-        sys.exit(1)
+def main(args=None):
+    parser = argparse.ArgumentParser(
+        prog="report",
+        description="Generate comparison reports from agent-spec runs",
+    )
+    parser.add_argument("run_ids", nargs="*", help="Run IDs to report on")
+    parser.add_argument("--all", action="store_true", dest="show_all", help="Show all runs")
+    parser.add_argument("--latest", action="store_true", help="Show most recent run")
+    parser.add_argument("--group-by", choices=["config", "model", "target"], help="Group results by field")
+    parser.add_argument("--compare", nargs=2, metavar="RUN_ID", help="Side-by-side two-run comparison")
+    parser.add_argument("--session", metavar="SESSION_ID", help="Iterate session report by depth")
+    args = args or parser.parse_args()
 
-    group_by = None
-    compare_ids = None
-    session_id = None
-    run_ids = []
-    latest = False
-
-    i = 1
-    while i < len(sys.argv):
-        arg = sys.argv[i]
-        if arg == "--all":
-            run_ids = sorted(os.listdir(BASE)) if BASE.exists() else []
-        elif arg == "--latest":
-            latest = True
-            if BASE.exists():
-                dirs = sorted(BASE.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True)
-                run_ids = [d.name for d in dirs[:1]]
-        elif arg == "--group-by":
-            i += 1
-            group_by = sys.argv[i] if i < len(sys.argv) else "config"
-        elif arg == "--compare":
-            compare_ids = (sys.argv[i + 1], sys.argv[i + 2])
-            i += 2
-        elif arg == "--session":
-            i += 1
-            session_id = sys.argv[i] if i < len(sys.argv) else None
-        else:
-            run_ids.append(arg)
-        i += 1
-
-    if session_id:
-        print_session_report(session_id)
+    if args.session:
+        print_session_report(args.session)
         return
 
-    if compare_ids:
-        a = load_run(compare_ids[0])
-        b = load_run(compare_ids[1])
+    if args.compare:
+        a = load_run(args.compare[0])
+        b = load_run(args.compare[1])
         if not a or not b:
             print("Could not load one or both runs.", file=sys.stderr)
             sys.exit(1)
         print_compare(a, b)
         return
+
+    run_ids = list(args.run_ids)
+    if args.show_all:
+        run_ids = sorted(os.listdir(BASE)) if BASE.exists() else []
+    elif args.latest:
+        if BASE.exists():
+            dirs = sorted(BASE.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True)
+            run_ids = [d.name for d in dirs[:1]]
 
     runs = []
     for rid in run_ids:
@@ -312,14 +299,17 @@ def main():
             runs.append(r)
 
     if not runs:
-        print("No runs found.", file=sys.stderr)
+        if not args.run_ids and not args.show_all and not args.latest:
+            parser.print_help()
+        else:
+            print("No runs found.", file=sys.stderr)
         sys.exit(1)
 
     print(f"# agent-spec Report — {len(runs)} run(s)\n")
     print_table(runs)
 
-    if group_by:
-        print_group_by(runs, group_by)
+    if args.group_by:
+        print_group_by(runs, args.group_by)
     else:
         print_summary(runs)
 

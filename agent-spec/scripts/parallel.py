@@ -25,10 +25,48 @@ import uuid
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from lib import PROJECT_DIR, SCRIPTS_DIR, PORT_MIN, PORT_MAX, die, require_dir, apc_log, now_ms
+from lib import (
+    PROJECT_DIR, SCRIPTS_DIR, PORT_MIN, PORT_MAX,
+    die, require_dir, apc_log, now_ms,
+    list_targets, list_configs, get_baseline_cost,
+    StatusLine, _color, GREEN, RED, RESET, DIM, BOLD, _IS_TTY,
+)
 
 
-def main():
+def _parse_log_for_result(log_file: str) -> tuple[str | None, str, float]:
+    """Parse an instance log for run_id, result, and cost."""
+    run_id = None
+    result = "UNKNOWN"
+    cost = 0.0
+    try:
+        log_text = Path(log_file).read_text()
+        m = re.search(r'Run:\s+([a-f0-9]{8})', log_text)
+        if not m:
+            m = re.search(r'agent-spec run: ([a-f0-9]{8})', log_text)
+        if m:
+            run_id = m.group(1)
+        rm = re.findall(r'RESULT: [A-Z/]+', log_text)
+        if rm:
+            result = rm[-1].replace("RESULT: ", "")
+        cm = re.findall(r'\$(\d+\.\d+)', log_text)
+        if cm:
+            cost = float(cm[-1])
+    except FileNotFoundError:
+        pass
+    return run_id, result, cost
+
+
+def _render_multi_status(statuses: list[StatusLine], labels: list[str]):
+    """Render all status lines by moving cursor up and rewriting."""
+    n = len(statuses)
+    # Move up n lines, rewrite each, end at bottom
+    sys.stderr.write(f"\033[{n}A")
+    for s in statuses:
+        s.update()
+    sys.stderr.flush()
+
+
+def main(args=None):
     parser = argparse.ArgumentParser(description="Parallel eval runner")
     parser.add_argument("target", help="Target name")
     parser.add_argument("config", nargs="?", default="baseline")
@@ -39,10 +77,13 @@ def main():
     parser.add_argument("--keep", action="store_true")
     parser.add_argument("--model", default="")
     parser.add_argument("--budget", default="")
-    args = parser.parse_args()
+    parser.add_argument("--verbose", action="store_true")
+    args = args or parser.parse_args()
 
     target_dir = PROJECT_DIR / "targets" / args.target
-    require_dir(target_dir, "Target not found")
+    if not target_dir.is_dir():
+        available = list_targets()
+        die(f"Target '{args.target}' not found. Available: {', '.join(available) if available else 'none'}")
 
     # Build variant matrix
     config_list = args.configs.split(",") if args.configs else [args.config]
@@ -73,6 +114,7 @@ def main():
     pid = os.getpid()
     procs = []
     log_files = []
+    labels = []
 
     # Generate parallel master run_id
     parallel_id = f"p-{uuid.uuid4().hex[:8]}"
@@ -84,12 +126,16 @@ def main():
         "configs": config_list, "models": model_list, "instances": args.instances,
     })
 
-    print(f"Launching {total} parallel instance(s) of {args.target}", file=sys.stderr)
-    print(f"  Parallel ID: {parallel_id}", file=sys.stderr)
-    print(f"  Logs: /tmp/agent-spec-parallel-out-{pid}-{{1..{total}}}.log", file=sys.stderr)
-    print(f"  Watch: tail -f /tmp/agent-spec-parallel-out-{pid}-*.log", file=sys.stderr)
-    print(f"  Master: python3 scripts/dashboard.py {parallel_id} --summary", file=sys.stderr)
+    # ── Header ───────────────────────────────────────────────────
+    print(f"── {args.target} ({total} runs) ──", file=sys.stderr)
+    if args.verbose:
+        print(f"  Parallel ID: {parallel_id}", file=sys.stderr)
     print(file=sys.stderr)
+
+    # ── Launch all instances ─────────────────────────────────────
+    baseline = get_baseline_cost(args.target, config_list[0])
+    budget = float(args.budget) if args.budget else None
+    statuses: list[StatusLine] = []
 
     for i, (v_config, v_model) in enumerate(variants, 1):
         instance_port = PORT_MIN + i - 1
@@ -110,11 +156,12 @@ def main():
             stim = stimuli_files[(i - 1) % len(stimuli_files)]
             shutil.copy2(stim, inject_dir / "wireframe.png")
 
-        desc = v_config
+        label = f"Run {i}: {v_config}"
         if v_model:
-            desc += f" / {Path(v_model).name}"
-        print(f"  Instance {i}: {desc} (port {instance_port})", file=sys.stderr)
-        apc_log("DEBUG", "instance_launched", f"Instance {i}: {desc}",
+            label += f" / {Path(v_model).name}"
+        labels.append(label)
+
+        apc_log("DEBUG", "instance_launched", f"Instance {i}: {v_config}",
                 {"instance": i, "config": v_config, "model": v_model, "port": instance_port})
 
         # Build args
@@ -136,48 +183,65 @@ def main():
             proc = subprocess.Popen(cmd, stdout=lf, stderr=subprocess.STDOUT)
             procs.append(proc)
 
-    print(file=sys.stderr)
-    print("Waiting for all instances...", file=sys.stderr)
+        # Create status line and print initial placeholder
+        status = StatusLine(label=label, budget=budget, baseline_cost=baseline)
+        statuses.append(status)
+        status.update()
+        if _IS_TTY:
+            print(file=sys.stderr)  # newline for each status line slot
 
-    # Collect results
+    # ── Poll loop ────────────────────────────────────────────────
+    is_tty = _IS_TTY
+    finished = [False] * total
+
+    while not all(finished):
+        for i, (proc, status) in enumerate(zip(procs, statuses)):
+            if finished[i]:
+                continue
+            if proc.poll() is not None:
+                # Instance done — parse result
+                run_id, result, cost = _parse_log_for_result(log_files[i])
+                status.finish(result, cost=cost)
+                finished[i] = True
+            elif is_tty:
+                # Tick the spinner for running instances
+                status.update()
+
+        if is_tty and not all(finished):
+            # Move cursor up to rewrite all lines
+            active_count = total
+            sys.stderr.write(f"\033[{active_count}A")
+            for s in statuses:
+                if not s.finished:
+                    s.update()
+                    sys.stderr.write("\n")
+                else:
+                    # Re-render finished line (already has newline from finish())
+                    sys.stderr.write("\n")
+            sys.stderr.flush()
+
+        time.sleep(2)
+
+    # ── Collect results and log ──────────────────────────────────
     failures = 0
     run_ids = []
     manifest = f"/tmp/agent-spec-parallel-{pid}-{int(time.time())}.txt"
 
-    for i, proc in enumerate(procs, 1):
-        proc.wait()
-        exit_code = proc.returncode
-        log_file = log_files[i - 1]
-
-        # Extract run_id from log
-        run_id = None
-        result_line = "RESULT: UNKNOWN"
-        try:
-            log_text = Path(log_file).read_text()
-            m = re.search(r'agent-spec run: ([a-f0-9]{8})', log_text)
-            if m:
-                run_id = m.group(1)
-            rm = re.findall(r'RESULT: [A-Z/]+', log_text)
-            if rm:
-                result_line = rm[-1]
-        except FileNotFoundError:
-            pass
+    for i, proc in enumerate(procs):
+        log_file = log_files[i]
+        run_id, result, cost = _parse_log_for_result(log_file)
 
         if run_id:
             run_ids.append(run_id)
             with open(manifest, "a") as mf:
                 mf.write(run_id + "\n")
-            print(f"  Instance {i}: run={run_id} exit={exit_code} {result_line}", file=sys.stderr)
 
             # Archive instance log
             results_dir = PROJECT_DIR / "results" / run_id
             if results_dir.is_dir():
                 shutil.copy2(log_file, results_dir / "parallel-instance.log")
 
-            # Normalize result to just PASS/FAIL (strip "RESULT: " prefix)
-            result_short = result_line.replace("RESULT: ", "")
-
-            if "PASS" not in result_line:
+            if result != "PASS":
                 failures += 1
                 stderr_tail = ""
                 try:
@@ -185,45 +249,53 @@ def main():
                     stderr_tail = "\n".join(stderr_tail)[:500]
                 except (FileNotFoundError, IndexError):
                     pass
-                apc_log("ERROR", "instance_failed", f"Instance {i} failed",
-                        {"instance": i, "run_id": run_id, "result": result_short,
-                         "exit_code": exit_code, "stderr_tail": stderr_tail},
+                apc_log("ERROR", "instance_failed", f"Instance {i+1} failed",
+                        {"instance": i+1, "run_id": run_id, "result": result,
+                         "exit_code": proc.returncode, "stderr_tail": stderr_tail},
                         run_id=parallel_id)
             else:
-                apc_log("INFO", "instance_complete", f"Instance {i} passed",
-                        {"instance": i, "run_id": run_id, "result": result_short,
-                         "exit_code": exit_code},
+                apc_log("INFO", "instance_complete", f"Instance {i+1} passed",
+                        {"instance": i+1, "run_id": run_id, "result": result,
+                         "exit_code": proc.returncode},
                         run_id=parallel_id)
         else:
-            print(f"  Instance {i}: exit={exit_code} (no run_id)", file=sys.stderr)
-            apc_log("ERROR", "instance_failed", f"Instance {i} crashed (no run_id)",
-                    {"instance": i, "exit_code": exit_code},
-                    run_id=parallel_id)
-            print(f"  --- Failure log (last 15 lines) ---", file=sys.stderr)
-            try:
-                lines = Path(log_file).read_text().splitlines()
-                for line in lines[-15:]:
-                    print(f"    {line}", file=sys.stderr)
-            except FileNotFoundError:
-                pass
-            print(f"  --- end ---", file=sys.stderr)
             failures += 1
+            apc_log("ERROR", "instance_failed", f"Instance {i+1} crashed (no run_id)",
+                    {"instance": i+1, "exit_code": proc.returncode},
+                    run_id=parallel_id)
+            if args.verbose:
+                print(f"\n  Instance {i+1} failed (no run_id). Last 15 lines:", file=sys.stderr)
+                try:
+                    lines = Path(log_file).read_text().splitlines()
+                    for line in lines[-15:]:
+                        print(f"    {line}", file=sys.stderr)
+                except FileNotFoundError:
+                    pass
 
     duration_ms = now_ms() - start_ms
-    apc_log("INFO", "parallel_complete", f"{total - failures}/{total} passed",
-            {"total": total, "passed": total - failures, "failed": failures,
+    passed = total - failures
+
+    apc_log("INFO", "parallel_complete", f"{passed}/{total} passed",
+            {"total": total, "passed": passed, "failed": failures,
              "run_ids": run_ids, "duration_ms": duration_ms},
             run_id=parallel_id)
+
+    # ── Summary ──────────────────────────────────────────────────
+    print(file=sys.stderr)
+    duration_s = duration_ms / 1000
+    if passed == total:
+        summary = _color(GREEN, f"{passed}/{total} passed")
+    else:
+        summary = _color(RED, f"{passed}/{total} passed")
+    print(f"  {summary}  ({duration_s:.0f}s)", file=sys.stderr)
 
     # Clean up inject dirs
     for d in Path("/tmp").glob(f"agent-spec-inject-{pid}-*"):
         shutil.rmtree(d, ignore_errors=True)
 
-    print(file=sys.stderr)
-    print(f"Manifest: {manifest}", file=sys.stderr)
-    print("Run IDs:", file=sys.stderr)
+    # Parseable output on stdout
     for rid in run_ids:
-        print(rid)  # stdout — parseable output
+        print(rid)
 
     sys.exit(failures)
 

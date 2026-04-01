@@ -15,10 +15,11 @@ sys.path.insert(0, str(Path(__file__).parent))
 from lib import (
     PROJECT_DIR, SCRIPTS_DIR, DEFAULT_MODEL, DEFAULT_BUDGET,
     parse_target_yaml, require_dir, require_file, die,
+    list_targets, list_configs,
 )
 
 
-def main():
+def main(args=None):
     parser = argparse.ArgumentParser(description="Run eval by target name")
     parser.add_argument("target", help="Target name (directory in targets/)")
     parser.add_argument("config", nargs="?", default="baseline", help="Config name (default: baseline)")
@@ -27,16 +28,20 @@ def main():
     parser.add_argument("--keep", action="store_true")
     parser.add_argument("--inject", default=None)
     parser.add_argument("--port", type=int, default=None)
-    args = parser.parse_args()
+    args = args or parser.parse_args()
 
     target_dir = PROJECT_DIR / "targets" / args.target
-    require_dir(target_dir, "Target not found")
+    if not target_dir.is_dir():
+        available = list_targets()
+        die(f"Target '{args.target}' not found. Available: {', '.join(available) if available else 'none'}")
 
     # Resolve config: target-specific first, then _shared
     config_dir = target_dir / "configs" / args.config
     if not config_dir.is_dir():
         config_dir = PROJECT_DIR / "targets" / "_shared" / "configs" / args.config
-        require_dir(config_dir, f"Config '{args.config}' not found in target or _shared")
+        if not config_dir.is_dir():
+            available = list_configs(args.target)
+            die(f"Config '{args.config}' not found. Available: {', '.join(available) if available else 'none'}")
 
     # Parse target.yaml
     yaml_file = target_dir / "target.yaml"

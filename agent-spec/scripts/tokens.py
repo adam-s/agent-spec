@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
-"""tokens.py — Print token metrics for a run or iterate session.
-
-Usage:
-  tokens.py <run_id>                   Single run tokens
-  tokens.py --session <session_id>     Rollup across all runs in an iterate session
-"""
+"""tokens.py — Print token metrics for a run or iterate session."""
+import argparse
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
@@ -83,18 +79,19 @@ def print_session(session_id: str):
     print(f"  {'TOTAL':>5}  {total_runs:>4}  {total_input:>8}  {total_output:>8}  ${total_cost:>7.3f}")
 
 
-def main():
-    if len(sys.argv) < 2:
-        print("Usage: tokens.py <run_id> | --session <session_id>", file=sys.stderr)
-        sys.exit(1)
+def main(args=None):
+    parser = argparse.ArgumentParser(description="Print token metrics for a run or iterate session")
+    parser.add_argument("run_id", nargs="?", help="Run ID to inspect")
+    parser.add_argument("--session", metavar="SESSION_ID", help="Iterate session ID for cost rollup")
+    args = args or parser.parse_args()
 
-    if sys.argv[1] == "--session":
-        if len(sys.argv) < 3:
-            print("Usage: tokens.py --session <session_id>", file=sys.stderr)
-            sys.exit(1)
-        print_session(sys.argv[2])
+    if args.session:
+        print_session(args.session)
+    elif args.run_id:
+        print_single(args.run_id)
     else:
-        print_single(sys.argv[1])
+        parser.print_help()
+        sys.exit(1)
 
 
 if __name__ == "__main__":

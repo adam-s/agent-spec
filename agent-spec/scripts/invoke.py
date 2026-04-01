@@ -11,6 +11,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import threading
 import uuid
 from pathlib import Path
 
@@ -18,13 +19,15 @@ sys.path.insert(0, str(Path(__file__).parent))
 from lib import (
     PROJECT_DIR, RUN_ROOT, SANDBOX_ROOT, DEFAULT_MODEL, DEFAULT_BUDGET, TIMEOUT_DEFAULT,
     SCRIPTS_DIR, apc_log, allocate_port, die, require_file, require_dir,
-    parse_output_json, now_ms,
+    parse_output_json, now_ms, get_baseline_cost, StatusLine,
+    BOLD, DIM, RESET, _color, _IS_TTY,
 )
 
 # ── Globals for cleanup ──────────────────────────────────────────
 
 _sandbox: Path | None = None
 _sidecar_proc: subprocess.Popen | None = None
+_agent_proc: subprocess.Popen | None = None
 _keep = False
 _run_dir: Path | None = None
 _results_dir: Path | None = None
@@ -32,6 +35,14 @@ _results_dir: Path | None = None
 
 def _archive_and_cleanup():
     """Archive logs then clean up. Runs on ANY exit."""
+    # Stop agent if still running
+    if _agent_proc and _agent_proc.poll() is None:
+        _agent_proc.terminate()
+        try:
+            _agent_proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            _agent_proc.kill()
+
     # Archive logs to results/
     if _run_dir and _results_dir:
         _results_dir.mkdir(parents=True, exist_ok=True)
@@ -77,8 +88,36 @@ def _handle_signal(signum, frame):
     sys.exit(1)
 
 
+def _read_stderr(proc, status, run_dir):
+    """Read agent stderr line-by-line, tee to file, update status."""
+    stderr_path = run_dir / "stderr.log"
+    with open(stderr_path, "w") as f:
+        for line in iter(proc.stderr.readline, ""):
+            f.write(line)
+            f.flush()
+            # Parse cost from claude CLI stderr (format: "Cost: $X.XX")
+            if "$" in line:
+                try:
+                    for part in line.split("$"):
+                        val = part.strip().split()[0].rstrip(",;)")
+                        cost = float(val)
+                        if cost > 0:
+                            status.update(cost=cost)
+                            break
+                except (ValueError, IndexError):
+                    pass
+
+
+def _tick_status(proc, status):
+    """Tick the status line every 2s while the agent is running."""
+    import time
+    while proc.poll() is None:
+        status.update()
+        time.sleep(2)
+
+
 def main():
-    global _sandbox, _sidecar_proc, _keep, _run_dir, _results_dir
+    global _sandbox, _sidecar_proc, _agent_proc, _keep, _run_dir, _results_dir
 
     parser = argparse.ArgumentParser(description="Run one agent in a sandbox")
     parser.add_argument("source", help="Source repo path")
@@ -92,9 +131,11 @@ def main():
     parser.add_argument("--setup", default="", help="Semicolon-separated setup commands")
     parser.add_argument("--inject", default="", help="Directory to inject into sandbox")
     parser.add_argument("--port", type=int, default=None)
+    parser.add_argument("--verbose", action="store_true", help="Show sandbox lifecycle details")
     args = parser.parse_args()
 
     _keep = args.keep
+    verbose = args.verbose
 
     # ── Phase 1: VALIDATE ────────────────────────────────────────
     require_dir(args.source, "Source repo not found")
@@ -119,14 +160,13 @@ def main():
     target_name = Path(args.source).name
     config_name = Path(args.config).name
 
-    print(f"=== agent-spec run: {run_id} ===")
-    print(f"  Target: {target_name}")
-    print(f"  Config: {config_name}")
-    print(f"  Model:  {args.model}")
+    # ── Header ───────────────────────────────────────────────────
+    print(f"── {target_name}/{config_name} ({args.model}) ──")
+    print(f"  Run:    {run_id}")
     print(f"  Budget: ${args.budget}")
-    print(f"  Port:   {port}")
-    print(f"  Log:    {_run_dir}/events.jsonl")
-    print(f"  Watch:  tail -f {_run_dir}/events.jsonl | jq .")
+    if verbose:
+        print(f"  Port:   {port}")
+        print(f"  Log:    {_run_dir}/events.jsonl")
     print()
 
     # ── Phase 2: SANDBOX ─────────────────────────────────────────
@@ -157,7 +197,8 @@ def main():
                     shutil.rmtree(target)
                 else:
                     target.unlink()
-                print(f"  Deleted: {f.strip()}")
+                if verbose:
+                    print(f"  Deleted: {f.strip()}")
         apc_log("DEBUG", "files_deleted", "Deleted files for agent to produce",
                 {"files": args.delete})
 
@@ -178,7 +219,8 @@ def main():
             cmd = cmd.strip()
             if not cmd:
                 continue
-            print(f"  Setup: {cmd}")
+            if verbose:
+                print(f"  Setup: {cmd}")
             result = subprocess.run(cmd, shell=True, cwd=sandbox_path,
                                     capture_output=True, text=True)
             if result.returncode != 0:
@@ -239,8 +281,17 @@ def main():
     timeout = int(os.environ.get("TIMEOUT", TIMEOUT_DEFAULT))
     start_ms = now_ms()
 
+    # Live status line
+    baseline = get_baseline_cost(target_name, config_name)
+    status = StatusLine(
+        label=f"{target_name}/{config_name}",
+        budget=float(args.budget),
+        baseline_cost=baseline,
+    )
+    status.update()  # Show initial status
+
     try:
-        result = subprocess.run(
+        _agent_proc = subprocess.Popen(
             ["claude", "-p", prompt_text,
              "--output-format", "json",
              "--dangerously-skip-permissions",
@@ -248,21 +299,45 @@ def main():
              "--model", args.model],
             cwd=sandbox_path,
             stdout=open(_run_dir / "output.json", "w"),
-            stderr=open(_run_dir / "stderr.log", "w"),
-            timeout=timeout,
+            stderr=subprocess.PIPE,
+            text=True,
         )
-        exit_code = result.returncode
-    except subprocess.TimeoutExpired:
-        exit_code = 124
-        apc_log("ERROR", "agent_timeout", f"Agent timed out after {timeout}s",
-                {"timeout": timeout})
+
+        # Threads: read stderr + tick timer
+        stderr_thread = threading.Thread(
+            target=_read_stderr, args=(_agent_proc, status, _run_dir), daemon=True)
+        timer_thread = threading.Thread(
+            target=_tick_status, args=(_agent_proc, status), daemon=True)
+        stderr_thread.start()
+        timer_thread.start()
+
+        # Wait with timeout
+        try:
+            _agent_proc.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            _agent_proc.terminate()
+            try:
+                _agent_proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                _agent_proc.kill()
+
+        stderr_thread.join(timeout=5)
+        exit_code = _agent_proc.returncode if _agent_proc.returncode is not None else 124
+
+    except Exception as e:
+        exit_code = 1
+        apc_log("ERROR", "agent_error", f"Failed to start agent: {e}",
+                {"exit_code": 1, "duration_ms": now_ms() - start_ms})
 
     duration_ms = now_ms() - start_ms
 
-    if exit_code == 0:
+    if exit_code == 124 or (_agent_proc and _agent_proc.returncode is None):
+        apc_log("ERROR", "agent_timeout", f"Agent timed out after {timeout}s",
+                {"timeout": timeout})
+    elif exit_code == 0:
         apc_log("INFO", "agent_complete", "Agent finished",
                 {"exit_code": 0, "duration_ms": duration_ms})
-    elif exit_code != 124:
+    else:
         stderr_tail = ""
         stderr_file = _run_dir / "stderr.log"
         if stderr_file.exists():
@@ -273,16 +348,16 @@ def main():
 
     # ── Phase 5: METRICS ─────────────────────────────────────────
     output_file = _run_dir / "output.json"
+    final_cost = status.cost
     if output_file.exists() and output_file.stat().st_size > 0:
         tokens = parse_output_json(output_file)
         if tokens:
             apc_log("METRIC", "token_update", "Token usage", tokens)
-            print(f"  Tokens: {tokens['input']} in / {tokens['output']} out / ${tokens['cost_usd']}")
+            final_cost = tokens.get("cost_usd", final_cost)
 
     # ── Phase 6: VERIFY ──────────────────────────────────────────
+    result_str = "N/A"
     if args.verify:
-        print()
-        print("=== Verification ===")
         shutil.copy2(args.verify, sandbox_path / "verify.sh")
 
         vresult = subprocess.run(
@@ -292,7 +367,6 @@ def main():
             env={**os.environ, "PORT": str(port), "AGENT_SPEC_RUN_ID": run_id},
         )
         output = vresult.stdout + vresult.stderr
-        print(output)
 
         apc_log("INFO", "verification_output", "Verify script output",
                 {"output": output[:5000], "exit_code": vresult.returncode})
@@ -308,23 +382,26 @@ def main():
 
         # Parse final result
         if "RESULT: PASS" in output:
+            result_str = "PASS"
             apc_log("INFO", "score", "PASS", {"result": "PASS"})
         elif "RESULT: FAIL" in output:
+            result_str = "FAIL"
             apc_log("ERROR", "score", "FAIL", {"result": "FAIL"})
         else:
             apc_log("WARN", "score", "No RESULT line", {"result": "N/A"})
 
-    # ── Summary ──────────────────────────────────────────────────
-    print()
-    print(f"  Results: {_results_dir}/")
-    print()
-    print(f"=== Run {run_id} complete ===")
+        # Show verification output in verbose mode
+        if verbose and output.strip():
+            print()
+            print(f"  {DIM}── verify ──{RESET}" if _IS_TTY else "  -- verify --")
+            for line in output.strip().splitlines():
+                print(f"  {DIM}{line}{RESET}" if _IS_TTY else f"  {line}")
 
-    # Run dashboard summary
-    subprocess.run(
-        [sys.executable, str(SCRIPTS_DIR / "dashboard.py"), run_id, "--summary"],
-        capture_output=False,
-    )
+    # ── Final status line ────────────────────────────────────────
+    status.finish(result_str, cost=final_cost, duration_s=duration_ms / 1000)
+
+    if verbose:
+        print(f"  Results: {_results_dir}/")
 
 
 if __name__ == "__main__":
