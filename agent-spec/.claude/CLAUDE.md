@@ -2,7 +2,7 @@
 
 ## The Trainer of Trainers
 
-agent-spec is a development tool for `.claude/` directories. It takes any project, launches parallel agents in disposable sandboxes, observes what the agents get right and wrong, and uses that signal to improve the project's `.claude/` — its CLAUDE.md, rules, skills, agents, or reference docs. The iteration loop (`/iterate`) is the core workflow: run agents → score → diagnose → fix instructions → rerun until agents pass autonomously.
+agent-spec is a development tool for `.claude/` directories. It takes any project, launches parallel agents in disposable sandboxes, observes what the agents get right and wrong, and uses that signal to improve the project's `.claude/` — its CLAUDE.md, rules, skills, agents, or reference docs.
 
 The target repositories (hono-websocket-counter, csv-reporter, sqlite-window-queries) are test fixtures — they exist to exercise the harness, not as deliverables. The product is agent-spec itself: its skills, scripts, rules, and the ability to sit down with any project and iteratively develop its `.claude/` until autonomous agents succeed without human intervention.
 
@@ -55,12 +55,13 @@ python3 scripts/dashboard.py <run_id> --summary
 
 See @.claude/rules/log-protocol.md for the full event schema and all reading tools.
 
-## Reference
+## Git
 
-- @.claude/rules/operational-workflow.md — tools, scripts, and workflow patterns
-- @.claude/rules/port-management.md — port ranges, PID registry, verify.sh patterns
-- @.claude/rules/testing-protocol.md — sandbox lifecycle, cordyceps, scoring contract
-- @.claude/rules/log-protocol.md — JSONL event format, reading and emitting events
-- @.claude/reference/recursive-training.md — Level 0/1/2 architecture and guards
-- @.claude/reference/bug-catalog.md — known failure classes from past iterations
-- @.claude/reference/claude-directory-reference.md — .claude/ directory best practices
+The git repository root is the **parent directory** (`agent-spec/`), not the working directory (`agent-spec/agent-spec/`). All git commands (status, add, commit, push) must target the parent. The parent repo contains multiple applications.
+
+## How `.claude/` Works
+
+- **`rules/`** — Always loaded. Keep lean.
+- **`skills/`** — Metadata loaded; body on invocation.
+- **`reference/`** — Never auto-loaded. Looked up on demand.
+- **`hooks/`** — Shell commands triggered by tool events.
