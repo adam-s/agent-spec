@@ -136,12 +136,12 @@ apc_log "INFO" "config_swapped" "Config applied" \
   "{\"config\":\"$CONFIG_NAME\"}"
 
 # 3e. Inject emitter libraries
-for emitter in "$SCRIPT_DIR/../inject/_apc.py" "$SCRIPT_DIR/../inject/_apc.ts"; do
+for emitter in "$SCRIPT_DIR/_apc.py" "$SCRIPT_DIR/_apc.ts"; do
   [[ -f "$emitter" ]] && cp "$emitter" "$SANDBOX/"
 done
 
 # 3f. Start resource monitor
-bash "$SCRIPT_DIR/../monitor/sidecar.sh" 30 &
+bash "$SCRIPT_DIR/sidecar.sh" 30 &
 set_sidecar_pid $!
 
 # ── Phase 4: EXECUTE ────────────────────────────────────────────
