@@ -45,6 +45,20 @@ verify.sh must:
 - Print exactly `RESULT: PASS` or `RESULT: FAIL` as the final verdict
 - If no RESULT line is found, the harness records `N/A` (not FAIL)
 
+## Hidden Output Format Contracts
+
+verify.sh often greps for specific strings in test output (e.g., `"5/5 tests passed"`). This creates a **hidden contract** between the test file's output format and verify.sh's expectations. When `delete_before_run` removes test files, the agent recreates them with different phrasing, and verify.sh breaks — even though all tests actually pass.
+
+**When diagnosing failures where verify.sh reports FAIL or N/A but the produced code looks correct:**
+1. Read verify.sh — what strings does it grep for?
+2. Read the agent's test file — what does it actually print?
+3. The mismatch IS the bug. Fix it in the config by documenting the expected output format.
+
+**When writing configs for targets with deleted test files:**
+- Tell the agent the exact test output format that verify.sh expects
+- Use conditional instructions: "If test.py exists, read it. If not, create it with this format: ..."
+- See `targets/csv-reporter/configs/tuned/CLAUDE.md` for a working example
+
 ## Agent Timeout
 
 Agents run with a 10-minute timeout by default (configurable via `TIMEOUT` env var). If an agent exceeds the timeout, it is terminated and an `agent_timeout` event is logged.

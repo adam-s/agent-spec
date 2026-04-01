@@ -107,30 +107,39 @@ RECURSE:
                "total_cost_usd": <sum>, "total_duration_ms": <wall clock>})
        RETURN with summary: "Converged at depth {depth}."
 
-  8. DIAGNOSE
-     For each failing instance, read produced code and events.
-     For EVERY finding, classify:
-       "Level 0 fix (trainer): ___" or "Level 2 fix (trainee): ___"
-     If uncertain, ask the human.
+  8. OBSERVE (mandatory before diagnosis)
+     For EACH failing instance:
+       a. python3 scripts/dashboard.py <run_id> --stream | grep -E "score|FAIL|ERROR|verification"
+       b. Read produced code: ls results/<run_id>/produced/
+       c. Read verify.sh output: check verification_output event in events.jsonl
+       d. If config snapshot exists: python3 scripts/dashboard.py --diff <prev_id> <this_id>
+
+     Do NOT skip this step. Diagnosis without observation leads to wrong fixes.
+
+  9. DIAGNOSE (gate: findings table required)
+     Produce a findings table with one row per failure. Every row MUST have:
+       | Instance | What failed | Evidence (file:line or event) | Fix | Level (0 or 2) |
+     A row without evidence in the "Evidence" column is not diagnosed — go back to OBSERVE.
+     If uncertain about Level classification, ask the human.
 
      EMIT: apc_log("INFO", "iteration_diagnosed", "Diagnosis complete",
             {"depth": depth, "session_id": session_id,
              "findings_count": <N>, "findings_summary": "brief description"})
 
-  9. APPLY FIXES
-     Level 2 → target's .claude/
-     Level 0 → agent-spec (selective)
-     After each fix, consistency-check all .claude/ files at that level.
+  10. APPLY FIXES
+      Level 2 → target's .claude/
+      Level 0 → agent-spec (selective)
+      After each fix, consistency-check all .claude/ files at that level.
 
-     EMIT: apc_log("INFO", "iteration_fixed", "Fixes applied",
-            {"depth": depth, "session_id": session_id,
-             "files_changed": ["path/to/file1", "path/to/file2"]})
+      EMIT: apc_log("INFO", "iteration_fixed", "Fixes applied",
+             {"depth": depth, "session_id": session_id,
+              "files_changed": ["path/to/file1", "path/to/file2"]})
 
-     EMIT: apc_log("INFO", "iteration_complete", "Iteration done",
-            {"depth": depth, "session_id": session_id, "converged": false,
-             "pass_rate": "M/N", "duration_ms": <elapsed>})
+      EMIT: apc_log("INFO", "iteration_complete", "Iteration done",
+             {"depth": depth, "session_id": session_id, "converged": false,
+              "pass_rate": "M/N", "duration_ms": <elapsed>})
 
-  10. depth += 1
+  11. depth += 1
       GOTO RECURSE
 ```
 
