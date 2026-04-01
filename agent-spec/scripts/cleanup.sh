@@ -37,7 +37,7 @@ echo ""
 echo "=== Verification ==="
 echo "  Sandboxes:    $(ls -d "$SANDBOX_ROOT"-* 2>/dev/null | wc -l | tr -d ' ')"
 echo "  Run dirs:     $(ls -d "$RUN_ROOT"/*/ 2>/dev/null | wc -l | tr -d ' ')"
-echo "  Tracked PIDs: $(wc -l < "$PID_FILE" 2>/dev/null | tr -d ' ' || echo 0)"
+echo "  Tracked PIDs: $([[ -f "$PID_FILE" ]] && wc -l < "$PID_FILE" | tr -d ' ' || echo 0)"
 echo "  Port $PORT_MIN:     $(lsof -ti:"$PORT_MIN" 2>/dev/null | wc -l | tr -d ' ')"
 
 echo ""
