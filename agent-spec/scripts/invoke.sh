@@ -189,17 +189,18 @@ if [[ -f "$RUN_DIR/output.json" ]] && [[ -s "$RUN_DIR/output.json" ]]; then
 import json, os
 try:
     data = json.load(open(os.environ["OFILE"]))
-    u = data.get("result", {}).get("modelUsage", data.get("modelUsage", {}))
-    if not u:
-        for key in data:
-            if isinstance(data[key], dict) and "inputTokens" in data[key]:
-                u = data[key]; break
-    inp = u.get("inputTokens", 0)
-    out = u.get("outputTokens", 0)
-    cache_c = u.get("cacheCreationInputTokens", 0)
-    cache_r = u.get("cacheReadInputTokens", 0)
-    cost = data.get("result", {}).get("costUSD", data.get("costUSD", 0))
-    turns = data.get("result", {}).get("numTurns", data.get("numTurns", 0))
+    # modelUsage may be {model_name: {inputTokens:...}} or flat {inputTokens:...}
+    mu = data.get("modelUsage", {})
+    if mu and "inputTokens" not in mu:
+        mu = next(iter(mu.values()), {})  # unwrap model-keyed dict
+    # fallback to usage field
+    u = data.get("usage", {})
+    inp = mu.get("inputTokens", u.get("input_tokens", 0))
+    out = mu.get("outputTokens", u.get("output_tokens", 0))
+    cache_c = mu.get("cacheCreationInputTokens", u.get("cache_creation_input_tokens", 0))
+    cache_r = mu.get("cacheReadInputTokens", u.get("cache_read_input_tokens", 0))
+    cost = data.get("total_cost_usd", mu.get("costUSD", 0))
+    turns = data.get("num_turns", 0)
     print(json.dumps({"input": inp, "output": out, "cache_create": cache_c,
                        "cache_read": cache_r, "cost_usd": round(cost, 4), "turns": turns}))
 except Exception as e:

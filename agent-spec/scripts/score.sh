@@ -9,5 +9,5 @@ RUN_ID="${1:?Usage: score.sh <run_id>}"
 EVENTS="$RUN_ROOT/$RUN_ID/events.jsonl"
 require_file "$EVENTS" "No events for run $RUN_ID"
 
-RESULT=$(grep '"event":"score"' "$EVENTS" | tail -1 | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['result'])" 2>/dev/null || echo "N/A")
+RESULT=$(grep '"event":' "$EVENTS" | grep '"score"' | tail -1 | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['result'])" 2>/dev/null || echo "N/A")
 echo "$RESULT"
