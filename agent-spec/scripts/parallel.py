@@ -32,6 +32,7 @@ from lib import (
     load_events, get_event,
     StatusLine, _color, GREEN, RED, RESET, DIM, BOLD, _IS_TTY,
 )
+from system_monitor import check_preflight, get_memory_usage
 
 
 def _parse_log_for_result(log_file: str) -> tuple[str | None, str, float]:
@@ -118,6 +119,21 @@ def main(args=None):
     max_parallel = PORT_MAX - PORT_MIN + 1
     if total > max_parallel:
         die(f"Too many parallel instances ({total}). Max is {max_parallel}.")
+
+    # Pre-flight resource check
+    ok, snapshot = check_preflight()
+    if not ok:
+        die(f"System resources critical — {snapshot['status_summary']}. "
+            f"Run 'python3 scripts/system_monitor.py' to see details.")
+
+    # Memory warning for parallel runs
+    mem = get_memory_usage()
+    estimated_mb = total * 500  # ~500MB per agent process
+    available_mb = mem["free_gb"] * 1024
+    if estimated_mb > available_mb * 0.8:
+        print(f"  WARNING: {total} agents need ~{estimated_mb}MB, "
+              f"only {available_mb:.0f}MB free. Risk of system overload.",
+              file=sys.stderr)
 
     # Collect stimuli
     stimuli_files = []

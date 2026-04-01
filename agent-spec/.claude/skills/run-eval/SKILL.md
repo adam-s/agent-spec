@@ -8,6 +8,16 @@ argument-hint: <target> [config] [--model MODEL] [--keep]
 
 Run a Claude agent against a target project in an isolated sandbox, then score the result.
 
+## Before Starting
+
+Confirm with the user:
+
+1. Target and config to run
+2. Single run or parallel (default: single)
+3. If parallel: how many instances (default: 1)
+
+Do NOT launch until the user confirms.
+
 ## Arguments
 
 - `$1` — target name (directory name in `targets/`, e.g., `csv-reporter`)

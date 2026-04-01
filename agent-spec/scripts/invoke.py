@@ -22,6 +22,7 @@ from lib import (
     parse_output_json, now_ms, get_baseline_cost, StatusLine,
     BOLD, DIM, RESET, _color, _IS_TTY,
 )
+from system_monitor import check_preflight
 
 # ── Globals for cleanup ──────────────────────────────────────────
 
@@ -250,21 +251,21 @@ def main():
         if src.exists():
             shutil.copy2(src, sandbox_path / emitter)
 
-    # 3f. Start sidecar
+    # 3f. Pre-flight resource check
+    ok, snapshot = check_preflight()
+    apc_log("INFO", "preflight_check", f"Resources: {snapshot['status_summary']}",
+            {"overall": snapshot["overall"], "cpu": snapshot["cpu_pct"],
+             "mem": snapshot["mem_pct"], "disk_free_gb": snapshot["disk_free_gb"]})
+    if not ok:
+        die(f"System resources critical — {snapshot['status_summary']}. "
+            f"Run 'python3 scripts/system_monitor.py' to see details.")
+
+    # 3g. Start sidecar
     _sidecar_proc = subprocess.Popen(
-        ["bash", str(SCRIPTS_DIR / "resources.sh")],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-    )
-    # Actually use the Python sidecar loop
-    _sidecar_proc.terminate()
-    _sidecar_proc = subprocess.Popen(
-        [sys.executable, "-c",
-         f"import time, subprocess, json, sys; sys.path.insert(0, '{SCRIPTS_DIR}'); "
-         f"from lib import apc_log; "
-         f"[((snap := subprocess.run(['bash', '{SCRIPTS_DIR}/resources.sh'], capture_output=True, text=True)), "
-         f"apc_log('METRIC', 'resource_snapshot', 'System resources', json.loads(snap.stdout.strip()) if snap.stdout.strip() else {{}}), "
-         f"time.sleep(30)) for _ in iter(int, 1)]"],
-        env={**os.environ}
+        [sys.executable, str(SCRIPTS_DIR / "system_monitor.py"),
+         "sidecar", "--run-id", run_id, "--interval", "30"],
+        env={**os.environ},
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
     )
     apc_log("DEBUG", "sidecar_started", "Resource monitor started",
             {"pid": _sidecar_proc.pid, "interval": 30})

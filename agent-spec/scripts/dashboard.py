@@ -93,6 +93,8 @@ EVENT_FORMATTERS = {
     "iteration_fixed":            _fmt_iteration_fixed,
     "iteration_complete":         _fmt_iteration_complete,
     "iteration_session_complete": _fmt_iteration_session_complete,
+    "preflight_check":    lambda d: f"{d.get('overall', '?')} cpu={d.get('cpu', 0)}% mem={d.get('mem', 0)}% disk={d.get('disk_free_gb', 0)}GB",
+    "resource_warning":   lambda d: f"cpu={d.get('cpu', 0)}% mem={d.get('mem', 0)}% disk={d.get('disk_free_gb', 0)}GB",
 }
 
 
@@ -154,6 +156,13 @@ def print_summary(run_id: str, events: list[dict]):
     if resource:
         d = resource["data"]
         print(f"  Resources: CPU {d.get('cpu', 0)}% | Mem {d.get('mem', 0)}% | Disk {d.get('disk_free_gb', 0)} GB free")
+
+    # Resource warnings
+    warnings = [e for e in events if e.get("event") == "resource_warning"]
+    if warnings:
+        print(f"  {YELLOW}Resource warnings: {len(warnings)}{RESET}")
+        for w in warnings[-3:]:  # show last 3
+            print(f"    {YELLOW}{w.get('msg', '?')}{RESET}")
 
     print()
     print("  Events:")

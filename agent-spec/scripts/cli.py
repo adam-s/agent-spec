@@ -50,6 +50,17 @@ def cmd_tokens(args):
     tokens.main(args)
 
 
+def cmd_monitor(args):
+    """Show system resource status."""
+    import system_monitor
+    # Translate CLI args to system_monitor's expected format
+    if args.watch:
+        args.command = "watch"
+    else:
+        args.command = None
+    system_monitor.main(args)
+
+
 def cmd_list(args):
     """Discover and list all targets with their configs."""
     targets = list_targets()
@@ -154,6 +165,12 @@ def build_parser():
     p_clean = sub.add_parser("clean", help="Stop processes, clear ports, remove sandboxes")
     p_clean.add_argument("--force", action="store_true", help="Also delete /tmp run logs")
     p_clean.set_defaults(func=cmd_clean)
+
+    # ── monitor ──
+    p_monitor = sub.add_parser("monitor", help="Show system resource status")
+    p_monitor.add_argument("--watch", action="store_true", help="Continuous monitoring")
+    p_monitor.add_argument("--interval", type=int, default=10, help="Watch interval in seconds")
+    p_monitor.set_defaults(func=cmd_monitor)
 
     # ── list ──
     p_list = sub.add_parser("list", help="List all targets and their configs")

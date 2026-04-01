@@ -1,5 +1,7 @@
 # agent-spec
 
+we are developing the agent-spec. This is the early period we are doing a lot of trial and error and we can delete, change, or add anything that is needed to ensure the project is simple, clean, and organized. we don't need to worry about backwards compatibility. If we make a change and an older code still uses it, we change the older code to use the better newer code. This is the same with instructions for .claude
+
 ## The Trainer of Trainers
 
 agent-spec is a development tool for `.claude/` directories. It takes any project, launches parallel agents in disposable sandboxes, observes what the agents get right and wrong, and uses that signal to improve the project's `.claude/` — its CLAUDE.md, rules, skills, agents, or reference docs.
@@ -17,6 +19,8 @@ Fixture results (run IDs, token counts, pass/fail per target, benchmark tables) 
 ## How to Operate
 
 Use existing skills and scripts — do not reimplement what already exists. See @.claude/rules/operational-workflow.md for the full tool inventory, workflow patterns, and when to use each.
+
+Before launching any eval or parallel run, confirm with the user. See @.claude/rules/resource-safety.md.
 
 Key skills: `/run-eval`, `/iterate`, `/report`, `/stop`, `/new-target`
 
