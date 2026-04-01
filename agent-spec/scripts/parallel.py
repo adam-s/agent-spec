@@ -184,15 +184,18 @@ def main():
                     pass
                 apc_log("ERROR", "instance_failed", f"Instance {i} failed",
                         {"instance": i, "run_id": run_id, "result": result_line,
-                         "exit_code": exit_code, "stderr_tail": stderr_tail})
+                         "exit_code": exit_code, "stderr_tail": stderr_tail},
+                        run_id=parallel_id)
             else:
                 apc_log("INFO", "instance_complete", f"Instance {i} passed",
                         {"instance": i, "run_id": run_id, "result": result_line,
-                         "exit_code": exit_code})
+                         "exit_code": exit_code},
+                        run_id=parallel_id)
         else:
             print(f"  Instance {i}: exit={exit_code} (no run_id)", file=sys.stderr)
             apc_log("ERROR", "instance_failed", f"Instance {i} crashed (no run_id)",
-                    {"instance": i, "exit_code": exit_code})
+                    {"instance": i, "exit_code": exit_code},
+                    run_id=parallel_id)
             print(f"  --- Failure log (last 15 lines) ---", file=sys.stderr)
             try:
                 lines = Path(log_file).read_text().splitlines()
@@ -206,7 +209,8 @@ def main():
     duration_ms = now_ms() - start_ms
     apc_log("INFO", "parallel_complete", f"{total - failures}/{total} passed",
             {"total": total, "passed": total - failures, "failed": failures,
-             "run_ids": run_ids, "duration_ms": duration_ms})
+             "run_ids": run_ids, "duration_ms": duration_ms},
+            run_id=parallel_id)
 
     # Clean up inject dirs
     for d in Path("/tmp").glob(f"agent-spec-inject-{pid}-*"):
