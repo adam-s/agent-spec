@@ -43,10 +43,15 @@ verify.sh must:
 - Exit 0 (even on test failure — exit code is not the scoring mechanism)
 - Print test output to stdout
 - Print exactly `RESULT: PASS` or `RESULT: FAIL` as the final verdict
+- If no RESULT line is found, the harness records `N/A` (not FAIL)
+
+## Agent Timeout
+
+Agents run with a 10-minute timeout by default (configurable via `TIMEOUT` env var). If an agent exceeds the timeout, it is terminated and an `agent_timeout` event is logged.
 
 ## Cleanup
 
-Always run `/stop` if a run fails mid-execution. The SubagentStop hook handles automatic cleanup when agents terminate.
+invoke.sh uses an EXIT trap that automatically stops the sidecar, clears ports, and removes the sandbox on any exit (success, failure, or signal). Manual cleanup with `/stop` is only needed if the trap itself is bypassed (e.g., SIGKILL).
 
 ## Bug Catalog
 
