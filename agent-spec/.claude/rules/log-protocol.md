@@ -52,6 +52,47 @@ All events are JSONL lines appended to `/tmp/agent-spec/{run_id}/events.jsonl`.
 - **Python**: `from _apc import log; log("INFO", "event", "message", {"key": "value"})`
 - **TypeScript**: `import { log } from "./_apc"; log("INFO", "event", "message", { key: "value" })`
 
+## Debug Logging
+
+Developer diagnostics with lazy evaluation and env toggle. Writes to stderr (dim) and `events.jsonl` (level `DEBUG`, event `debug:{tag}`). Filter with `jq 'select(.level=="DEBUG")'`.
+
+Disabled with `AGENT_SPEC_DEBUG=0`. Enabled by default.
+
+### Call signatures
+
+```
+debug('tag', 'message')
+debug('tag', 'message', {'key': 'value'})
+debug('tag', 'message', lambda: {'key': expensive()})   # Python lazy
+debug('tag', 'message', () => ({ key: expensive() }))   // TS lazy
+```
+
+### Emitting debug
+
+- **Python (harness)**: `from lib import debug; debug("invoke", "sandbox ready", {"path": sandbox})`
+- **Python (sandbox)**: `from _apc import debug; debug("test", "db initialized")`
+- **TypeScript (sandbox)**: `import { debug } from "./_apc"; debug("test", "server started", { port: 3100 })`
+- **Bash** (inline — no library needed):
+  ```bash
+  apc_debug() {
+    [ "${AGENT_SPEC_DEBUG:-1}" = "0" ] && return
+    local tag="$1" msg="$2" data="${3:-{\}}"
+    local ts=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
+    printf '\033[2m[%s] [%s] %s\033[0m\n' "$ts" "$tag" "$msg" >&2
+    local log="/tmp/agent-spec/${AGENT_SPEC_RUN_ID:-unknown}/events.jsonl"
+    mkdir -p "$(dirname "$log")"
+    printf '{"ts":"%s","level":"DEBUG","src":"%s","event":"debug:%s","msg":"%s","data":%s}\n' \
+      "$ts" "$(basename "$0")" "$tag" "$msg" "$data" >> "$log"
+  }
+  ```
+
+### Filtering debug events
+
+```bash
+jq 'select(.level=="DEBUG")' /tmp/agent-spec/<run_id>/events.jsonl
+jq 'select(.event=="debug:verify")' /tmp/agent-spec/<run_id>/events.jsonl
+```
+
 ## Reading
 
 - Live: `scripts/dashboard.py <run_id>`

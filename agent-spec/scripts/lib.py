@@ -66,6 +66,22 @@ def apc_log(level: str, event: str, msg: str, data: dict | None = None,
         f.write(json.dumps(entry) + "\n")
 
 
+_DEBUG_ENABLED = os.environ.get("AGENT_SPEC_DEBUG", "1") != "0"
+
+
+def debug(tag: str, msg: str, data=None, run_id: str | None = None):
+    """Developer debug logging — stderr + events.jsonl with level DEBUG."""
+    if not _DEBUG_ENABLED:
+        return
+    resolved = data() if callable(data) else data
+    ts = datetime.now(timezone.utc).strftime("%H:%M:%S.%f")[:-3]
+    line = f"[{ts}] [{tag}] {msg}"
+    if resolved:
+        line += f"  {json.dumps(resolved, default=str)}"
+    print(f"\033[2m{line}\033[0m", file=sys.stderr)
+    apc_log("DEBUG", f"debug:{tag}", msg, resolved or {}, run_id=run_id)
+
+
 # ── Port Management ──────────────────────────────────────────────
 
 def allocate_port(requested: int | None = None) -> int:

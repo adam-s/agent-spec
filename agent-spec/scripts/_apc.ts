@@ -25,3 +25,21 @@ export function log(
   };
   appendFileSync(LOG, JSON.stringify(entry) + "\n");
 }
+
+const DEBUG_ENABLED = (process.env.AGENT_SPEC_DEBUG ?? "1") !== "0";
+
+export function debug(
+  tag: string,
+  msg: string,
+  data?: (() => Record<string, unknown>) | Record<string, unknown>
+) {
+  if (!DEBUG_ENABLED) return;
+  const resolved = typeof data === "function" ? data() : data;
+  const ts = new Date().toISOString().slice(11, 23);
+  let line = `[${ts}] [${tag}] ${msg}`;
+  if (resolved && Object.keys(resolved).length > 0) {
+    line += `  ${JSON.stringify(resolved)}`;
+  }
+  process.stderr.write(`\x1b[2m${line}\x1b[0m\n`);
+  log("DEBUG", `debug:${tag}`, msg, resolved ?? {});
+}
