@@ -18,51 +18,44 @@ Every common operation has a script or skill. Before writing any bash to sandbox
 
 | Script | When to use |
 | ------ | ----------- |
-| `scripts/cli/dashboard.sh <run_id>` | Monitor a run (live or post-completion) |
-| `scripts/reporting/score.sh <run_id>` | Get pass/fail for a run |
-| `scripts/reporting/tokens.sh <run_id>` | Get token metrics for a run |
-| `scripts/reporting/report.py --all` | Full report across all runs |
-| `scripts/reporting/report.py --all --group-by config` | Compare configs with deltas |
-| `scripts/reporting/report.py --all --group-by model` | Compare models with deltas |
-| `scripts/reporting/report.py --compare <id1> <id2>` | Side-by-side two-run diff |
-| `scripts/reporting/save-baseline.sh <run_id>` | Save a run as the baseline for its target/config |
-| `scripts/reporting/check-regression.sh <run_id>` | Compare against saved baseline (REGRESSION or OK) |
-| `scripts/sandbox/clear-ports.sh` | Sweep reserved port ranges |
-| `scripts/sandbox/cleanup.sh` | Full state reset |
-| `scripts/sandbox/track-pid.sh <pid> <port> <purpose>` | Register a background process for cleanup |
-| `scripts/tuning/parallel-invoke.sh <target> [config]` | Launch N parallel evals with stimuli injection |
-| `scripts/tuning/parallel-invoke.sh <target> --configs a,b` | A/B test two configs in parallel |
-| `scripts/tuning/parallel-invoke.sh <target> --models x,y` | Benchmark two models in parallel |
-| `scripts/tuning/capture-wireframe.sh <url> <output>` | Screenshot a URL to PNG |
+| `scripts/run-eval.sh <target> [config]` | Run one eval by target name |
+| `scripts/invoke.sh <source> <config> <prompt>` | Low-level: sandbox + agent + verify |
+| `scripts/parallel.sh <target> --configs a,b` | A/B test configs in parallel |
+| `scripts/parallel.sh <target> --models x,y` | Benchmark models in parallel |
+| `scripts/parallel.sh <target> --instances N` | N reps of same config |
+| `scripts/dashboard.sh <run_id>` | Monitor a run (live or summary) |
+| `scripts/dashboard.sh --latest` | Monitor most recent run |
+| `scripts/report.py --all` | Full report across all runs |
+| `scripts/report.py --all --group-by config` | Compare configs with deltas |
+| `scripts/report.py --all --group-by model` | Compare models with deltas |
+| `scripts/cleanup.sh` | Full state reset (ports, sandboxes, PIDs) |
+
+## Config resolution
+
+Configs are resolved in order:
+1. `targets/<target>/configs/<config>/` (target-specific)
+2. `targets/_shared/configs/<config>/` (shared across targets)
+
+Shared configs: baseline, token-efficient, structured, workflow, hybrid, drona23.
 
 ## Workflow patterns
 
 ### One-shot eval
 1. `/run-eval target config`
-2. `/report --latest`
+2. `scripts/dashboard.sh --latest --summary`
 
 ### A/B test configs
-1. `parallel-invoke.sh target --configs baseline,tuned --model haiku`
-2. `report.py <id1> <id2> --group-by config` or `report.py --compare <id1> <id2>`
+1. `scripts/parallel.sh target --configs baseline,tuned --model haiku`
+2. `python3 scripts/report.py <ids> --group-by config`
 
 ### Model benchmark
-1. `parallel-invoke.sh target baseline --models haiku,sonnet`
-2. `report.py <id1> <id2> --group-by model`
-
-### Regression check
-1. Save a known-good run: `save-baseline.sh <run_id>`
-2. After changes, re-run: `/run-eval target config`
-3. Check: `check-regression.sh <new_run_id>`
-
-### Parallel iteration
-1. `/iterate target` — follows the recursive loop
-2. Classify every fix as Level 0 (trainer) or Level 2 (trainee) before applying
-3. Save baseline at convergence: `save-baseline.sh <run_id>`
+1. `scripts/parallel.sh target baseline --models haiku,sonnet`
+2. `python3 scripts/report.py <ids> --group-by model`
 
 ### After any failure or stuck state
 1. `/stop` — clears everything
-2. Check `scripts/cli/dashboard.sh <run_id>` for what went wrong
-3. Check @.claude/reference/bug-catalog.md for known failure patterns
+2. `scripts/dashboard.sh <run_id> --summary` — see what happened
+3. `cat /tmp/agent-spec/<run_id>/stderr.log` — agent stderr
 
 ### Adding a new target
 1. `/new-target`
