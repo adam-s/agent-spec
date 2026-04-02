@@ -140,8 +140,8 @@ def get_cpu_usage() -> dict:
 
 
 def get_agent_spec_processes() -> dict:
-    """Count active agent-spec runs, sandboxes, and ports."""
-    from lib import SANDBOX_ROOT, RUN_ROOT, PORT_MIN, PORT_MAX
+    """Count active agent-spec runs, sandboxes, ports, and tracked PIDs."""
+    from lib import SANDBOX_ROOT, RUN_ROOT, PORT_MIN, PORT_MAX, get_tracked_pids
 
     sandboxes = len(glob.glob(f"{SANDBOX_ROOT}-*"))
 
@@ -150,22 +150,31 @@ def get_agent_spec_processes() -> dict:
         for d in RUN_ROOT.iterdir():
             events = d / "events.jsonl"
             if events.exists():
-                # Check if run has a completion event
                 text = events.read_text()
                 if '"agent_started"' in text and '"agent_complete"' not in text and '"agent_error"' not in text:
                     active_runs += 1
 
     ports_in_use = []
     for port in range(PORT_MIN, PORT_MAX + 1):
-        result = subprocess.run(["lsof", f"-ti:{port}"], capture_output=True, timeout=3)
-        if result.returncode == 0 and result.stdout.strip():
-            ports_in_use.append(port)
+        try:
+            result = subprocess.run(["lsof", f"-ti:{port}"], capture_output=True, timeout=3)
+            if result.returncode == 0 and result.stdout.strip():
+                ports_in_use.append(port)
+        except subprocess.TimeoutExpired:
+            pass
+
+    tracked = get_tracked_pids()
+    alive_pids = [p for p in tracked if p["alive"]]
+    orphan_pids = [p for p in tracked if not p["alive"]]
 
     return {
         "active_runs": active_runs,
         "sandboxes": sandboxes,
         "ports_in_use": ports_in_use,
         "port_count": len(ports_in_use),
+        "tracked_pids": tracked,
+        "alive_pids": len(alive_pids),
+        "orphan_pids": len(orphan_pids),
     }
 
 
@@ -305,6 +314,13 @@ def print_status_table(snapshot: dict | None = None):
     print(f"  {'Sandboxes':<22} {procs['sandboxes']:>14}")
     ports_str = ",".join(str(p) for p in procs["ports_in_use"]) if procs["ports_in_use"] else "none"
     print(f"  {'Ports in use':<22} {procs['port_count']:>14}  {ports_str}")
+    print(f"  {'Tracked PIDs (alive)':<22} {procs['alive_pids']:>14}")
+    if procs['orphan_pids'] > 0:
+        print(f"  {'Orphaned PIDs':<22} {procs['orphan_pids']:>14}  [WARN]")
+    # Show individual tracked processes
+    for p in procs.get("tracked_pids", []):
+        status = "alive" if p["alive"] else "dead"
+        print(f"    PID {p['pid']:<8} {p['purpose']:<16} [{status}]")
 
     # Custom collectors
     for c in snapshot.get("custom", []):

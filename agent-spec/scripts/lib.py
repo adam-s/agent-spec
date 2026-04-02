@@ -107,11 +107,64 @@ def release_port(port: int):
 # ── Process Management ────────────────────────────────────────────
 
 def track_pid(pid: int, port: int = 0, purpose: str = "unknown"):
+    """Register a PID for cleanup. Called for every process we spawn."""
     with open(PID_FILE, "a") as f:
         f.write(f"{pid}|{port}|{purpose}\n")
 
 
+def _pid_alive(pid: int) -> bool:
+    """Check if a process is still running."""
+    try:
+        os.kill(pid, 0)  # signal 0 = check existence
+        return True
+    except (ProcessLookupError, PermissionError):
+        return False
+
+
+def _stop_pid(pid: int, purpose: str = "", timeout: float = 5) -> bool:
+    """Stop a process: SIGTERM → wait → SIGKILL. Returns True if stopped."""
+    if not _pid_alive(pid):
+        return True
+    try:
+        # Try SIGTERM first
+        os.kill(pid, signal.SIGTERM)
+        deadline = time.time() + timeout
+        while time.time() < deadline and _pid_alive(pid):
+            time.sleep(0.2)
+        # Escalate to SIGKILL if still alive
+        if _pid_alive(pid):
+            os.kill(pid, signal.SIGKILL)
+            time.sleep(0.5)
+        label = f" ({purpose})" if purpose else ""
+        if not _pid_alive(pid):
+            print(f"  Stopped: PID {pid}{label}")
+            return True
+        else:
+            print(f"  WARNING: PID {pid}{label} did not stop", file=sys.stderr)
+            return False
+    except (ProcessLookupError, PermissionError):
+        return True
+
+
+def _stop_process_tree(pid: int, purpose: str = "", timeout: float = 5):
+    """Stop a process and all its children (bottom-up)."""
+    # Find children first
+    try:
+        result = subprocess.run(
+            ["pgrep", "-P", str(pid)], capture_output=True, text=True, timeout=3
+        )
+        if result.returncode == 0:
+            for child_pid in result.stdout.strip().split("\n"):
+                if child_pid.strip():
+                    _stop_process_tree(int(child_pid.strip()), f"child of {pid}", timeout)
+    except (subprocess.TimeoutExpired, ValueError):
+        pass
+    # Then stop the parent
+    _stop_pid(pid, purpose, timeout)
+
+
 def stop_tracked_pids():
+    """Stop all tracked processes and their children. Clears the registry."""
     if not PID_FILE.exists():
         return
     for line in PID_FILE.read_text().splitlines():
@@ -119,13 +172,32 @@ def stop_tracked_pids():
         if len(parts) >= 1 and parts[0]:
             try:
                 pid = int(parts[0])
-                os.kill(pid, signal.SIGTERM)
                 purpose = parts[2] if len(parts) > 2 else "unknown"
-                port = parts[1] if len(parts) > 1 else "?"
-                print(f"  Stopped: PID {pid} ({purpose}) port {port}")
-            except (ProcessLookupError, ValueError):
+                _stop_process_tree(pid, purpose)
+            except ValueError:
                 pass
     PID_FILE.write_text("")
+
+
+def get_tracked_pids() -> list[dict]:
+    """Return list of tracked PIDs with their status."""
+    if not PID_FILE.exists():
+        return []
+    pids = []
+    for line in PID_FILE.read_text().splitlines():
+        parts = line.strip().split("|")
+        if len(parts) >= 1 and parts[0]:
+            try:
+                pid = int(parts[0])
+                pids.append({
+                    "pid": pid,
+                    "port": parts[1] if len(parts) > 1 else "?",
+                    "purpose": parts[2] if len(parts) > 2 else "unknown",
+                    "alive": _pid_alive(pid),
+                })
+            except ValueError:
+                pass
+    return pids
 
 
 # ── YAML Parsing ─────────────────────────────────────────────────

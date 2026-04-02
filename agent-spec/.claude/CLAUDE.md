@@ -1,5 +1,7 @@
 # agent-spec
 
+**STOP CRASHING THE MACHINE. DO NOT USE ALL SYSTEM RESOURCES.** Before launching ANY process that spawns a Claude agent, confirm with the user. One agent at a time. Sequential, not parallel. Always use `run_in_background`. Never block the conversation waiting for a run. See @.claude/rules/resource-safety.md — these rules are non-negotiable.
+
 we are developing the agent-spec. This is the early period we are doing a lot of trial and error and we can delete, change, or add anything that is needed to ensure the project is simple, clean, and organized. we don't need to worry about backwards compatibility. If we make a change and an older code still uses it, we change the older code to use the better newer code. This is the same with instructions for .claude
 
 ## The Trainer of Trainers

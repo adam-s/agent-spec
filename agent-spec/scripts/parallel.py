@@ -29,7 +29,7 @@ from lib import (
     PROJECT_DIR, SCRIPTS_DIR, PORT_MIN, PORT_MAX, RUN_ROOT,
     die, require_dir, apc_log, now_ms,
     list_targets, list_configs, get_baseline_cost,
-    load_events, get_event,
+    load_events, get_event, track_pid, stop_tracked_pids,
     StatusLine, _color, GREEN, RED, RESET, DIM, BOLD, _IS_TTY,
 )
 from system_monitor import check_preflight, get_memory_usage
@@ -211,6 +211,7 @@ def main(args=None):
 
         with open(log_file, "w") as lf:
             proc = subprocess.Popen(cmd, stdout=lf, stderr=subprocess.STDOUT)
+            track_pid(proc.pid, instance_port, f"parallel-{i}")
             procs.append(proc)
 
         # Create status line and print initial placeholder

@@ -11,7 +11,6 @@ import shutil
 import signal
 import subprocess
 import sys
-import threading
 import uuid
 from pathlib import Path
 
@@ -20,14 +19,14 @@ from lib import (
     PROJECT_DIR, RUN_ROOT, SANDBOX_ROOT, DEFAULT_MODEL, DEFAULT_BUDGET, TIMEOUT_DEFAULT,
     SCRIPTS_DIR, apc_log, allocate_port, die, require_file, require_dir,
     parse_output_json, now_ms, get_baseline_cost, StatusLine,
-    BOLD, DIM, RESET, _color, _IS_TTY,
+    track_pid, _stop_process_tree,
+    DIM, RESET, _IS_TTY,
 )
 from system_monitor import check_preflight
 
 # ── Globals for cleanup ──────────────────────────────────────────
 
 _sandbox: Path | None = None
-_sidecar_proc: subprocess.Popen | None = None
 _agent_proc: subprocess.Popen | None = None
 _keep = False
 _run_dir: Path | None = None
@@ -36,13 +35,9 @@ _results_dir: Path | None = None
 
 def _archive_and_cleanup():
     """Archive logs then clean up. Runs on ANY exit."""
-    # Stop agent if still running
+    # Stop agent and its entire process tree
     if _agent_proc and _agent_proc.poll() is None:
-        _agent_proc.terminate()
-        try:
-            _agent_proc.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            _agent_proc.kill()
+        _stop_process_tree(_agent_proc.pid, "agent")
 
     # Archive logs to results/
     if _run_dir and _results_dir:
@@ -69,14 +64,6 @@ def _archive_and_cleanup():
                     dest.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(f, dest)
 
-    # Stop sidecar
-    if _sidecar_proc and _sidecar_proc.poll() is None:
-        _sidecar_proc.terminate()
-        try:
-            _sidecar_proc.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            _sidecar_proc.kill()
-
     # Remove sandbox
     if not _keep and _sandbox and _sandbox.exists():
         shutil.rmtree(_sandbox, ignore_errors=True)
@@ -89,36 +76,8 @@ def _handle_signal(signum, frame):
     sys.exit(1)
 
 
-def _read_stderr(proc, status, run_dir):
-    """Read agent stderr line-by-line, tee to file, update status."""
-    stderr_path = run_dir / "stderr.log"
-    with open(stderr_path, "w") as f:
-        for line in iter(proc.stderr.readline, ""):
-            f.write(line)
-            f.flush()
-            # Parse cost from claude CLI stderr (format: "Cost: $X.XX")
-            if "$" in line:
-                try:
-                    for part in line.split("$"):
-                        val = part.strip().split()[0].rstrip(",;)")
-                        cost = float(val)
-                        if cost > 0:
-                            status.update(cost=cost)
-                            break
-                except (ValueError, IndexError):
-                    pass
-
-
-def _tick_status(proc, status):
-    """Tick the status line every 2s while the agent is running."""
-    import time
-    while proc.poll() is None:
-        status.update()
-        time.sleep(2)
-
-
 def main():
-    global _sandbox, _sidecar_proc, _agent_proc, _keep, _run_dir, _results_dir
+    global _sandbox, _agent_proc, _keep, _run_dir, _results_dir
 
     parser = argparse.ArgumentParser(description="Run one agent in a sandbox")
     parser.add_argument("source", help="Source repo path")
@@ -260,15 +219,8 @@ def main():
         die(f"System resources critical — {snapshot['status_summary']}. "
             f"Run 'python3 scripts/system_monitor.py' to see details.")
 
-    # 3g. Start sidecar
-    _sidecar_proc = subprocess.Popen(
-        [sys.executable, str(SCRIPTS_DIR / "system_monitor.py"),
-         "sidecar", "--run-id", run_id, "--interval", "30"],
-        env={**os.environ},
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-    )
-    apc_log("DEBUG", "sidecar_started", "Resource monitor started",
-            {"pid": _sidecar_proc.pid, "interval": 30})
+    # 3g. Exclude sandbox from Spotlight indexing
+    Path(sandbox_path / ".metadata_never_index").touch()
 
     # ── Phase 4: EXECUTE ─────────────────────────────────────────
     prompt_text = Path(args.prompt_file).read_text()
@@ -282,47 +234,27 @@ def main():
     timeout = int(os.environ.get("TIMEOUT", TIMEOUT_DEFAULT))
     start_ms = now_ms()
 
-    # Live status line
-    baseline = get_baseline_cost(target_name, config_name)
-    status = StatusLine(
-        label=f"{target_name}/{config_name}",
-        budget=float(args.budget),
-        baseline_cost=baseline,
-    )
-    status.update()  # Show initial status
-
+    stderr_path = _run_dir / "stderr.log"
     try:
-        _agent_proc = subprocess.Popen(
-            ["claude", "-p", prompt_text,
-             "--output-format", "json",
-             "--dangerously-skip-permissions",
-             "--max-budget-usd", args.budget,
-             "--model", args.model],
-            cwd=sandbox_path,
-            stdout=open(_run_dir / "output.json", "w"),
-            stderr=subprocess.PIPE,
-            text=True,
-        )
+        with open(_run_dir / "output.json", "w") as out_f, \
+             open(stderr_path, "w") as err_f:
+            _agent_proc = subprocess.Popen(
+                ["claude", "-p", prompt_text,
+                 "--output-format", "json",
+                 "--dangerously-skip-permissions",
+                 "--max-budget-usd", args.budget,
+                 "--model", args.model],
+                cwd=sandbox_path,
+                stdout=out_f,
+                stderr=err_f,
+            )
+            track_pid(_agent_proc.pid, port, "agent")
 
-        # Threads: read stderr + tick timer
-        stderr_thread = threading.Thread(
-            target=_read_stderr, args=(_agent_proc, status, _run_dir), daemon=True)
-        timer_thread = threading.Thread(
-            target=_tick_status, args=(_agent_proc, status), daemon=True)
-        stderr_thread.start()
-        timer_thread.start()
-
-        # Wait with timeout
-        try:
-            _agent_proc.wait(timeout=timeout)
-        except subprocess.TimeoutExpired:
-            _agent_proc.terminate()
             try:
-                _agent_proc.wait(timeout=10)
+                _agent_proc.wait(timeout=timeout)
             except subprocess.TimeoutExpired:
-                _agent_proc.kill()
+                _stop_process_tree(_agent_proc.pid, "agent")
 
-        stderr_thread.join(timeout=5)
         exit_code = _agent_proc.returncode if _agent_proc.returncode is not None else 124
 
     except Exception as e:
@@ -349,7 +281,7 @@ def main():
 
     # ── Phase 5: METRICS ─────────────────────────────────────────
     output_file = _run_dir / "output.json"
-    final_cost = status.cost
+    final_cost = 0.0
     if output_file.exists() and output_file.stat().st_size > 0:
         tokens = parse_output_json(output_file)
         if tokens:
@@ -399,6 +331,12 @@ def main():
                 print(f"  {DIM}{line}{RESET}" if _IS_TTY else f"  {line}")
 
     # ── Final status line ────────────────────────────────────────
+    baseline = get_baseline_cost(target_name, config_name)
+    status = StatusLine(
+        label=f"{target_name}/{config_name}",
+        budget=float(args.budget),
+        baseline_cost=baseline,
+    )
     status.finish(result_str, cost=final_cost, duration_s=duration_ms / 1000)
 
     if verbose:
