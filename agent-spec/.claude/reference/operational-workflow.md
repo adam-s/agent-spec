@@ -50,7 +50,7 @@ Shared configs: baseline, token-efficient, structured, workflow, hybrid, drona23
 2. `python3 scripts/dashboard.py --latest --summary`
 
 ### A/B test configs
-1. `python3 scripts/parallel.py target --configs baseline,tuned --model haiku`
+1. `python3 scripts/parallel.py target --configs baseline,experimental --model haiku`
 2. `python3 scripts/report.py <ids> --group-by config`
 
 ### Model benchmark

@@ -77,7 +77,7 @@ RECURSE:
      Collect run IDs from stdout.
 
      For A/B testing configs within iteration:
-       --configs baseline,tuned
+       --configs baseline,experimental
 
      For model comparison within iteration:
        --models haiku,sonnet

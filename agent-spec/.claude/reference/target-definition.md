@@ -17,7 +17,7 @@ targets/<name>/
 └── inject/                  # (optional) Files copied into sandbox before agent runs
 ```
 
-At least one config directory is required (typically `baseline` or `tuned`).
+At least one config directory is required (typically `baseline`).
 
 ## target.yaml
 
@@ -111,9 +111,8 @@ Each config is a `.claude/` directory that gets swapped into the sandbox, replac
 **Resolution order:** target-specific (`targets/<name>/configs/<config>/`) first, then shared (`targets/_shared/configs/<config>/`).
 
 **Naming conventions:**
-- `baseline` — minimal instructions, used to measure what the agent does with little guidance
-- `tuned` — improved instructions developed through iteration, the main working config
-- Other names for A/B testing specific approaches
+- `baseline` — the control config, used to establish the baseline measurement
+- Additional configs for A/B testing specific approaches (e.g., `structured`, `token-efficient`)
 
 The CLAUDE.md inside a config should:
 - Tell the agent to read existing files before writing (especially test files)

@@ -45,8 +45,8 @@ python3 "$CLAUDE_PROJECT_DIR/scripts/invoke.py" \
   "$CONFIG_DIR" \
   "$PROMPT_FILE" \
   --verify "$VERIFY_FILE" \
-  --model "${MODEL:-claude-sonnet-4-6}" \
-  --budget "${BUDGET:-2.00}"
+  --model "${MODEL:-$(grep 'model:' "$TARGET_DIR/target.yaml" | awk '{print $2}')}" \
+  --budget "${BUDGET:-$(grep 'budget:' "$TARGET_DIR/target.yaml" | awk '{print $2}')}"
 ```
 
 **Important**: Before calling invoke.sh, read target.yaml for `delete_before_run` entries. After the sandbox is created but before the agent runs, delete those files from the sandbox so the agent must produce them.

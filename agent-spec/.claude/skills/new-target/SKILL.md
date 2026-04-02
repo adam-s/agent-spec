@@ -22,8 +22,8 @@ verify: verify.sh
 delete_before_run: []
 setup: []
 agent:
-  model: claude-sonnet-4-6
-  budget: 2.00
+  model: claude-haiku-4-5-20251001
+  budget: 1.00
 ```
 
 **prompt.md**:
@@ -49,6 +49,15 @@ fi
 **configs/baseline/CLAUDE.md**:
 ```
 A coding project.
+```
+
+**configs/baseline/settings.json**:
+```json
+{
+  "permissions": {
+    "deny": []
+  }
+}
 ```
 
 Make verify.sh executable: `chmod +x targets/$1/verify.sh`
