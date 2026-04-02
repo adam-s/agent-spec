@@ -41,7 +41,7 @@ The improved `target/.claude/` directory and a results summary.
 2. **How many parallel instances?** Default 3. Ask if the user wants different stimuli per instance (wireframes, varied prompts, etc.) or identical runs for statistical coverage.
 3. **Max depth?** Default 5. This is the hard stop — iteration halts even if not converged.
 4. **Cleanup mode?** Full cleanup (default) or keep sandboxes for inspection.
-5. **Stimuli?** Optional per-instance variation (screenshot URLs, data files, etc.) that get injected into each sandbox. If none, all instances are identical.
+5. **Stimuli?** Optional per-instance variation (screenshot URLs, data files, etc.) that get injected into each workspace. If none, all instances are identical.
 
 Do NOT launch agents until the user answers.
 

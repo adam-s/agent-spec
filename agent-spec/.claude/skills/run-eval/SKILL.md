@@ -6,7 +6,7 @@ argument-hint: <eval> [config] [--model MODEL] [--keep]
 
 # /run-eval — Run an evaluation
 
-Run a Claude agent against a project in an isolated sandbox, then score the result.
+Run a Claude agent in a workspace, then score the result.
 
 ## Before Starting
 
@@ -23,7 +23,7 @@ Do NOT launch until the user confirms.
 - `$1` — eval name (directory name in `evals/`, e.g., `csv-reporter`)
 - `$2` — config name (directory name in `evals/<eval>/configs/`, default: `baseline`)
 - `--model <name>` — override model (default from EVAL.md frontmatter)
-- `--keep` — keep sandbox after completion for inspection
+- `--keep` — keep workspace after completion for inspection
 - `--budget <usd>` — override budget
 
 ## Steps

@@ -2,13 +2,13 @@
 
 ## Use existing tools — do not reimplement
 
-Every common operation has a script or skill. Before writing any bash to sandbox a repo, check ports, score a run, or view results — check the table below. If a tool exists, use it.
+Every common operation has a script or skill. Before writing any bash to build a workspace, check ports, score a run, or view results — check the table below. If a tool exists, use it.
 
 ## Skills (slash commands)
 
 | Skill | When to use |
 | ----- | ----------- |
-| `/run-eval <eval> [config]` | Run one agent in a sandbox and score it |
+| `/run-eval <eval> [config]` | Run one agent in a workspace and score it |
 | `/iterate <eval>` | Parallel agents → score → diagnose → fix instructions → recurse |
 | `/report` | View results: latest, by run_id, or full comparison |
 | `/stop` | Halt everything: processes, ports, sandboxes |
@@ -19,7 +19,7 @@ Every common operation has a script or skill. Before writing any bash to sandbox
 | Script | When to use |
 | ------ | ----------- |
 | `scripts/run_eval.py <eval> [config]` | Run one eval by name |
-| `scripts/invoke.py <source> <config> <prompt>` | Low-level: sandbox + agent + verify |
+| `scripts/invoke.py <source> <config> <prompt>` | Low-level: workspace + agent + verify |
 | `scripts/parallel.py <eval> --configs a,b` | A/B test configs in parallel |
 | `scripts/parallel.py <eval> --models x,y` | Benchmark models in parallel |
 | `scripts/parallel.py <eval> --instances N` | N reps of same config |
@@ -39,7 +39,7 @@ Every common operation has a script or skill. Before writing any bash to sandbox
 
 Configs live inside the eval: `evals/<eval>/configs/<config>/`
 
-Each config is a complete `.claude/` directory that gets swapped into the sandbox. Every config MUST include task-specific context — especially the output format contract that verify.sh depends on. Generic configs without task context will fail because the agent produces output in a different format than verify.sh expects.
+Each config is a complete `.claude/` directory placed into the workspace. Every config MUST include task-specific context — especially the output format contract that verify.sh depends on. Generic configs without task context will fail because the agent produces output in a different format than verify.sh expects.
 
 ## Workflow patterns
 

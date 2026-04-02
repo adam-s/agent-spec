@@ -49,8 +49,8 @@ The agent never touches your real code.
 | ------- | ----------- |
 | **Eval** | Defined by EVAL.md — frontmatter (config) + body (task prompt) |
 | **Config** | A `.claude/` directory variant to test |
-| **Sandbox** | Disposable copy in `/tmp/claude/agent-spec-{uuid}/` |
-| **Cordyceps** | Modifying the sandbox before the agent sees it |
+| **Workspace** | Disposable directory — built from a source repo, seed files, or both |
+| **Cordyceps** | Modifying the workspace before the agent sees it |
 | **Baseline** | Stored result from a known-good run — the control measurement |
 | **Verify script** | `verify.sh` that outputs `RESULT: PASS` or `RESULT: FAIL` |
 
