@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """run_eval.py — Run an evaluation by eval name.
 
-Usage: python3 scripts/run_eval.py <eval> [config] [options]
+Usage:
+  python3 scripts/run_eval.py <eval> [config] [options]
+  python3 scripts/run_eval.py <eval> [config] --challenge <name> [options]
 """
 
 import argparse
@@ -20,6 +22,73 @@ from lib import (
 )
 
 
+def run_single(eval_dir, config_dir, cfg, args, challenge_name=None, challenge_dir=None):
+    """Run a single challenge × config combination."""
+
+    # Determine workspace source
+    if challenge_dir:
+        # Matrix eval: workspace from seeds
+        seeds_dir = challenge_dir / "seeds"
+        source_path = None
+        prompt_file_path = challenge_dir / "prompt.md"
+        verify_path = challenge_dir / "verify.sh"
+        setup_script = challenge_dir / "setup.sh"
+        setup_cmds = setup_script.read_text().strip() if setup_script.exists() else ""
+    else:
+        # Single-challenge eval: workspace from source
+        seeds_dir = None
+        source_path = (eval_dir / cfg["source"]).resolve() if cfg.get("source") else None
+        # Prompt from EVAL.md body
+        prompt_text = cfg.get("prompt", "")
+        if not prompt_text:
+            die("EVAL.md has no prompt body")
+        verify_path = eval_dir / cfg.get("verify", "verify.sh")
+        setup_cmds = ";".join(cfg.get("setup", []))
+
+    # Write prompt to temp file
+    if challenge_dir:
+        require_file(prompt_file_path, f"No prompt.md in challenge {challenge_name}")
+        prompt_text = prompt_file_path.read_text()
+
+    prompt_file = tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False, prefix='eval-prompt-')
+    prompt_file.write(prompt_text)
+    prompt_file.close()
+
+    # Build invoke.py args
+    model = args.model or cfg.get("model") or DEFAULT_MODEL
+    budget = args.budget or cfg.get("budget") or DEFAULT_BUDGET
+
+    invoke_args = [
+        sys.executable, str(SCRIPTS_DIR / "invoke.py"),
+    ]
+
+    if source_path:
+        invoke_args.append(str(source_path))
+    invoke_args += [
+        str(config_dir),
+        prompt_file.name,
+        "--model", model,
+        "--budget", budget,
+    ]
+
+    if verify_path.exists():
+        invoke_args += ["--verify", str(verify_path)]
+    if seeds_dir and seeds_dir.is_dir():
+        invoke_args += ["--seeds", str(seeds_dir)]
+    if cfg.get("delete"):
+        invoke_args += ["--delete", ",".join(cfg["delete"])]
+    if setup_cmds:
+        invoke_args += ["--setup", setup_cmds]
+    if challenge_name:
+        invoke_args += ["--challenge", challenge_name]
+    if args.keep:
+        invoke_args.append("--keep")
+    if args.port is not None:
+        invoke_args += ["--port", str(args.port)]
+
+    return subprocess.run(invoke_args).returncode
+
+
 def main(args=None):
     parser = argparse.ArgumentParser(description="Run eval by name")
     parser.add_argument("eval", help="Eval name (directory in evals/)")
@@ -27,8 +96,8 @@ def main(args=None):
     parser.add_argument("--model", default=None)
     parser.add_argument("--budget", default=None)
     parser.add_argument("--keep", action="store_true")
-    parser.add_argument("--inject", default=None)
     parser.add_argument("--port", type=int, default=None)
+    parser.add_argument("--challenge", default=None, help="Run only this challenge (matrix evals)")
     args = args or parser.parse_args()
 
     eval_dir = PROJECT_DIR / "evals" / args.eval
@@ -47,51 +116,24 @@ def main(args=None):
     require_file(eval_file, "No EVAL.md")
     cfg = parse_eval_md(eval_file)
 
-    # Resolve source path
-    source_path = (eval_dir / cfg["source"]).resolve()
-    if not source_path.is_dir():
-        die(f"Source repo not found: {cfg['source']} (from {eval_dir})")
+    # Detect eval type: matrix (has challenges/) or single
+    challenges_dir = eval_dir / "challenges"
+    if challenges_dir.is_dir():
+        # Matrix eval — run all challenges (or just one if --challenge specified)
+        challenges = sorted(d.name for d in challenges_dir.iterdir() if d.is_dir())
+        if args.challenge:
+            if args.challenge not in challenges:
+                die(f"Challenge '{args.challenge}' not found. Available: {', '.join(challenges)}")
+            challenges = [args.challenge]
 
-    # Write prompt to temp file (from EVAL.md body)
-    prompt = cfg.get("prompt", "")
-    if not prompt:
-        die("EVAL.md has no prompt body (content after frontmatter)")
-
-    # Lint: warn on hardcoded ports
-    if re.search(r'\b3[01]\d{2}\b', prompt):
-        print("WARNING: prompt may contain hardcoded port — use __PORT__", file=sys.stderr)
-
-    # Write prompt to a temp file for invoke.py
-    prompt_file = tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False, prefix='eval-prompt-')
-    prompt_file.write(prompt)
-    prompt_file.close()
-
-    # Build invoke.py args
-    model = args.model or cfg["model"] or DEFAULT_MODEL
-    budget = args.budget or cfg["budget"] or DEFAULT_BUDGET
-
-    invoke_args = [
-        sys.executable, str(SCRIPTS_DIR / "invoke.py"),
-        str(source_path),
-        str(config_dir),
-        prompt_file.name,
-        "--model", model,
-        "--budget", budget,
-        "--verify", str(eval_dir / cfg["verify"]),
-    ]
-
-    if cfg["delete"]:
-        invoke_args += ["--delete", ",".join(cfg["delete"])]
-    if cfg["setup"]:
-        invoke_args += ["--setup", ";".join(cfg["setup"])]
-    if args.keep:
-        invoke_args.append("--keep")
-    if args.inject:
-        invoke_args += ["--inject", args.inject]
-    if args.port is not None:
-        invoke_args += ["--port", str(args.port)]
-
-    os.execvp(sys.executable, invoke_args)
+        for ch in challenges:
+            run_single(eval_dir, config_dir, cfg, args,
+                       challenge_name=ch, challenge_dir=challenges_dir / ch)
+    else:
+        # Single-challenge eval
+        if not cfg.get("source"):
+            die("Single-challenge eval requires 'source' in EVAL.md")
+        run_single(eval_dir, config_dir, cfg, args)
 
 
 if __name__ == "__main__":

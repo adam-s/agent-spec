@@ -1,188 +1,165 @@
 # Eval Definition
 
-An eval is defined by an EVAL.md file with YAML frontmatter (configuration) and a markdown body (the task prompt). This follows the same pattern as SKILL.md and AGENT.md in Claude Code.
-
-## How Workspaces Are Built
-
-A workspace is a disposable directory where an agent runs. It can be built two ways:
-
-**From a source repo:** Copy an existing project directory into the workspace. Use `source:` in frontmatter.
-
-**From seed files:** Assemble the workspace from individual files listed in `seeds:`. The workspace starts empty and only contains what you put in it.
-
-Both can be combined — copy a source repo, then add seed files on top.
-
-## The Eval-Config Relationship
-
-An eval defines the challenge: what files go into the workspace, what the task is, what success looks like. A config defines how to instruct the agent (the `.claude/` directory).
-
-Configs are independent of evals. The same config can be tested across multiple challenges. In a comparison experiment (e.g., 6 configs × 3 challenges = 18 runs), configs and challenges are the two axes of a matrix.
+An eval is an experiment. It defines challenges, configs, and produces runs.
 
 ```
-EVAL.md (the challenge)
-  │
-  ├── What goes in the workspace (source and/or seeds)
-  ├── What to delete after copying (cordyceps)
-  ├── What success looks like (reference + verify.sh)
-  ├── The task prompt (body)
-  │
-  └── task_context:                    ← the bridge to configs
-        output_contract: "5/5 tests passed"
-        required_reads: [test.py, data/sales.csv]
-        protected_files: [test.py, data/*]
+challenges × configs = runs
 ```
 
-```
-configs/<name>/ (the variable)
-  │
-  ├── CLAUDE.md — instruction style (the thing being tested)
-  ├── settings.json — permissions
-  ├── rules/, skills/, hooks/ — optional components
-  │
-  └── MUST include task_context from EVAL.md
-```
+That's it. Every eval is this cross-product, regardless of what's being tested.
 
-**The dependency:** every config must include the eval's task context — the output format contract, required reads, and protected files. Without this, the agent produces correct code but in a format verify.sh doesn't recognize, causing false FAILs.
+- A focused eval: 1 challenge × 1 config = 1 run
+- A config comparison: 3 challenges × 6 configs = 18 runs
+- An ablation test: 1 challenge × 6 configs (each with a component removed) = 6 runs
+- A model benchmark: 1 challenge × 1 config × 3 models = 3 runs
 
-**In config comparison experiments:** each config varies the instruction STYLE but shares the same task CONTEXT. The style is the independent variable; the task context is the constant.
+The dimensions can grow if we encounter experiments that don't fit. But the structure is always: dimensions × runs = results, stored in one place.
 
 ## Directory Layout
 
+### Multi-challenge eval
+
 ```
 evals/<name>/
-├── EVAL.md                    # Definition: frontmatter + prompt body
-├── verify.sh                  # Scoring script (must be executable)
-├── seeds/                     # (optional) Files to assemble into workspace
+├── EVAL.md                          # Experiment definition
+├── challenges/
+│   ├── csv-reporter/
+│   │   ├── prompt.md                # Task for this challenge
+│   │   ├── verify.sh               # How to score this challenge
+│   │   └── seeds/                   # Files placed into workspace
+│   │       ├── test.py
+│   │       └── data/sales.csv
+│   ├── sqlite-window-queries/
+│   │   ├── prompt.md
+│   │   ├── verify.sh
+│   │   ├── setup.sh                # Optional: npm install, etc.
+│   │   └── seeds/
+│   │       ├── test.js
+│   │       ├── seed.sql
+│   │       └── package.json
+│   └── hono-websocket-counter/
+│       ├── prompt.md
+│       ├── verify.sh
+│       ├── setup.sh
+│       └── seeds/
+│           ├── test.js
+│           └── package.json
 ├── configs/
-│   ├── baseline/
-│   │   ├── CLAUDE.md          # Agent instructions for this config
-│   │   └── settings.json      # Permissions for this config
-│   └── <other-configs>/       # Additional configs for comparison
-└── inject/                    # (optional) Additional files injected after setup
+│   ├── A-baseline/CLAUDE.md
+│   ├── B-token-efficient/CLAUDE.md
+│   └── .../
+└── results/                         # All runs stored here
 ```
 
-At least one config directory is required (typically `baseline`).
+### Single-challenge eval
+
+The simplest case — one challenge, inline in the EVAL.md body:
+
+```
+evals/<name>/
+├── EVAL.md                          # Challenge defined inline (source + prompt in body)
+├── verify.sh
+├── configs/
+│   └── baseline/
+│       ├── CLAUDE.md
+│       └── settings.json
+└── results/
+```
+
+Both are the same structure. A single-challenge eval is just the case where `challenges/` is omitted and the challenge is defined inline in the EVAL.md frontmatter + body.
 
 ## EVAL.md Format
 
-### Source-based workspace (copy a project)
+### Multi-challenge
+
+```markdown
+---
+name: config-comparison
+description: Compare .claude/ instruction styles across coding challenges
+model: claude-sonnet-4-6
+budget: 2.00
+---
+```
+
+The frontmatter defines defaults. Each challenge in `challenges/` provides its own prompt, verify, and seeds. Configs in `configs/` are shared across all challenges.
+
+### Single-challenge (inline)
 
 ```markdown
 ---
 name: csv-reporter
-description: Test agent's ability to write code that passes an existing test suite
+description: Iterate on csv-reporter instructions
 source: ../../../csv-reporter
 model: claude-haiku-4-5-20251001
 budget: 1.00
 delete:
   - report.py
-reference:
-  type: test-file
-  file: test.py
-  pass_pattern: "5/5 tests passed"
-task_context:
-  required_reads:
-    - test.py
-    - data/sales.csv
-  protected_files:
-    - test.py
-    - data/*
 ---
 
 Write report.py that reads data/sales.csv and prints statistics.
 Run python3 test.py to verify your work passes all tests.
 ```
 
-### Seed-based workspace (assemble from parts)
-
-```markdown
----
-name: csv-challenge
-description: Can the agent write a CSV analysis script from seed files and a test suite?
-model: claude-haiku-4-5-20251001
-budget: 1.00
-seeds:
-  - data/sales.csv
-  - test.py
-reference:
-  type: test-file
-  file: test.py
-  pass_pattern: "5/5 tests passed"
-task_context:
-  required_reads:
-    - test.py
-    - data/sales.csv
-  protected_files:
-    - test.py
-    - data/*
----
-
-Write report.py that reads data/sales.csv and prints statistics.
-Run python3 test.py to verify your work passes all tests.
-```
+When `source:` is present and no `challenges/` directory exists, the eval is a single-challenge experiment. The body is the prompt, `verify.sh` is at the eval root, and the source repo is copied into the workspace.
 
 ### Frontmatter Fields
 
 | Field | Required | Type | Description |
 | ----- | -------- | ---- | ----------- |
 | `name` | Yes | string | Eval identifier. Must match the directory name. |
-| `description` | No | string | What this eval tests. |
-| `source` | No | path | Path to a project directory to copy into the workspace. |
-| `seeds` | No | list | Files to copy into the workspace (relative to eval dir or absolute). |
-| `model` | No | string | Model to use. Default: `claude-haiku-4-5-20251001` |
-| `budget` | No | string | Max cost in USD. Default: `1.00` |
-| `delete` | No | list | Files to delete from workspace after copying source. |
-| `setup` | No | list | Shell commands run inside workspace before agent starts. |
-| `port` | No | integer | Port to allocate. `__PORT__` in body gets substituted. |
-| `reference` | No | object | What defines success. See reference types below. |
-| `task_context` | No | object | Task-specific context every config must include. |
+| `description` | No | string | What this experiment tests. |
+| `model` | No | string | Default model. Override per run with `--model`. |
+| `budget` | No | string | Default max cost in USD. |
+| `source` | No | path | Single-challenge: path to project to copy into workspace. |
+| `delete` | No | list | Single-challenge: files to delete from workspace. |
+| `setup` | No | list | Single-challenge: commands run before agent starts. |
+| `port` | No | integer | Port to allocate. `__PORT__` substituted in prompts. |
 
-Either `source` or `seeds` (or both) must be provided. The workspace must have files in it.
+## Challenges
 
-### Body
+A challenge defines one task: what goes into the workspace, what the agent must do, and how to verify.
 
-The markdown body after the second `---` is the task prompt given to the agent.
+Each challenge directory contains:
 
-## Reference Types
+| File | Required | Description |
+| ---- | -------- | ----------- |
+| `prompt.md` | Yes | Task given to the agent |
+| `verify.sh` | Yes | Scoring script — must output `RESULT: PASS` or `RESULT: FAIL` |
+| `seeds/` | Yes | Files placed into the workspace before the agent runs |
+| `setup.sh` | No | Commands run after seeds are placed (e.g., `npm install`) |
 
-```yaml
-# Test file — run it, grep for pattern
-reference:
-  type: test-file
-  file: test.js
-  pass_pattern: "tests passed"
+The workspace for each run starts empty, receives the seeds, runs setup, then gets the config's `.claude/` placed in it.
 
-# Screenshot — compare result to reference image
-reference:
-  type: screenshot
-  file: reference.png
+## Configs
 
-# Exit code — command succeeds
-reference:
-  type: exit-code
-  command: "pnpm build && pnpm lint"
-```
+A config is a `.claude/` directory variant placed into the workspace. Configs are independent of challenges — the same config is tested against every challenge in the eval.
+
+Configs can contain any `.claude/` components: CLAUDE.md, rules/, skills/, hooks/, agents/, settings.json.
+
+### task_context
+
+When an eval has task-specific requirements that every config must respect (e.g., "don't modify test.py"), the challenge's verify.sh encodes this. Configs can optionally include `permissions.deny` rules to mechanically enforce file protection, but this is the config author's choice — it's part of the instruction style being tested.
+
+## Results
+
+All results for one eval go in `evals/<name>/results/`. Each run produces a directory named by run ID containing events.jsonl, token metrics, and verification output.
+
+For a matrix eval, results are tagged with both challenge and config names so they can be grouped and compared.
 
 ## verify.sh
 
 The scoring script. Must follow the scoring contract:
 
-- Always `exit 0` — the exit code is not the scoring mechanism
-- Print exactly `RESULT: PASS` or `RESULT: FAIL` as the final verdict line
-- If no RESULT line is found, the harness records `N/A`
+- Always exit 0 — the exit code of verify.sh itself is not the scoring mechanism
+- Print `RESULT: PASS` or `RESULT: FAIL` as the verdict
+- Can use test exit codes internally (e.g., `python3 test.py; if [ $? -eq 0 ]; then echo "RESULT: PASS"`)
 
-## task_context
+## Extending
 
-The bridge between the eval and its configs:
+If a new experiment doesn't fit challenges × configs, add a new dimension. The structure is always:
 
-| Field | Type | Description |
-| ----- | ---- | ----------- |
-| `output_contract` | string | The exact output format verify.sh greps for. |
-| `required_reads` | list | Files the agent should read before writing code. |
-| `protected_files` | list | Files the agent must not modify (becomes permissions.deny). |
+```
+dimensions × runs = results
+```
 
-## Configs
-
-Each config is a `.claude/` directory placed into the workspace. Configs are independent — the same config can be used across multiple evals/challenges.
-
-Every config must include the eval's task context (output contract, required reads, protected files). The instruction STYLE varies; the task CONTEXT is constant.
+Possible future dimensions: models (same config, different models), stimuli (same config, different input data), repetitions (same everything, multiple runs for variance).

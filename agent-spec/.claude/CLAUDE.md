@@ -4,9 +4,9 @@
 
 ## What This Is
 
-agent-spec is a test harness for evaluating agent behavior. It assembles disposable workspaces, runs agents in them, and measures the results — pass/fail, token cost, tool calls, time.
+The product is `agent-spec/.claude/` — the orchestrator instructions that make an agent capable of setting up and running ANY experiment a developer describes. A developer says what they want to test, and the orchestrator figures out how to build the workspaces, run the agents, and report the results. Scripts are utilities that the orchestrator uses. Evals are ephemeral test output. The `.claude/` instructions are the product.
 
-A workspace can be built from anything: copying an existing project, assembling seed files into an empty directory, or any combination. The workspace is disposable — created for one run, destroyed after.
+A developer might say: "Compare 6 different .claude/ instruction styles against 3 coding tasks and see which one uses the fewest tokens." The orchestrator should be able to take that, understand the experiment, assemble the workspaces, run the matrix, and report the results — without the developer writing YAML, bash, or config files.
 
 Three testing layers, each adding signal:
 
@@ -15,8 +15,6 @@ Three testing layers, each adding signal:
 3. **Behavior testing** — Did the agent make good decisions? Analyze event traces for tool choices, rule adherence, token efficiency.
 
 The primary metric is **cost-to-correctness** — not just pass/fail, but how many tokens it took to get there.
-
-The product is agent-spec itself: its skills, scripts, rules, and reference docs. Eval results are ephemeral. The only artifacts worth committing are generalized improvements to agent-spec.
 
 ## Recursive Architecture
 

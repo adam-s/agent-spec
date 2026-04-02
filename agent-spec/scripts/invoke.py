@@ -80,8 +80,8 @@ def _handle_signal(signum, frame):
 def main():
     global _sandbox, _agent_proc, _keep, _run_dir, _results_dir
 
-    parser = argparse.ArgumentParser(description="Run one agent in a sandbox")
-    parser.add_argument("source", help="Source repo path")
+    parser = argparse.ArgumentParser(description="Run one agent in a workspace")
+    parser.add_argument("source", nargs="?", default=None, help="Source repo path (optional if --seeds used)")
     parser.add_argument("config", help="Config directory path")
     parser.add_argument("prompt_file", help="Prompt file path")
     parser.add_argument("--budget", default=DEFAULT_BUDGET)
@@ -90,16 +90,23 @@ def main():
     parser.add_argument("--keep", action="store_true")
     parser.add_argument("--delete", default="", help="Comma-separated files to delete")
     parser.add_argument("--setup", default="", help="Semicolon-separated setup commands")
-    parser.add_argument("--inject", default="", help="Directory to inject into sandbox")
+    parser.add_argument("--inject", default="", help="Directory to inject into workspace")
+    parser.add_argument("--seeds", default="", help="Directory of seed files to copy into workspace")
     parser.add_argument("--port", type=int, default=None)
-    parser.add_argument("--verbose", action="store_true", help="Show sandbox lifecycle details")
+    parser.add_argument("--verbose", action="store_true", help="Show workspace lifecycle details")
+    parser.add_argument("--challenge", default="", help="Challenge name (for logging)")
     args = parser.parse_args()
 
     _keep = args.keep
     verbose = args.verbose
 
     # ── Phase 1: VALIDATE ────────────────────────────────────────
-    require_dir(args.source, "Source repo not found")
+    if not args.source and not args.seeds:
+        die("Either source repo or --seeds must be provided")
+    if args.source:
+        require_dir(args.source, "Source repo not found")
+    if args.seeds:
+        require_dir(args.seeds, "Seeds directory not found")
     require_dir(args.config, "Config directory not found")
     require_file(args.prompt_file, "Prompt file not found")
     if args.verify:
@@ -118,7 +125,7 @@ def main():
     port = allocate_port(args.port)
     os.environ["PORT"] = str(port)
 
-    target_name = Path(args.source).name
+    target_name = args.challenge or (Path(args.source).name if args.source else Path(args.seeds).parent.name)
     config_name = Path(args.config).name
 
     # ── Header ───────────────────────────────────────────────────
@@ -130,13 +137,29 @@ def main():
         print(f"  Log:    {_run_dir}/events.jsonl")
     print()
 
-    # ── Phase 2: SANDBOX ─────────────────────────────────────────
-    sandbox_path = Path(f"{SANDBOX_ROOT}-{run_id}")
-    if sandbox_path.exists():
-        die(f"Sandbox already exists: {sandbox_path}")
+    # ── Phase 2: WORKSPACE ───────────────────────────────────────
+    workspace_path = Path(f"{SANDBOX_ROOT}-{run_id}")
+    if workspace_path.exists():
+        die(f"Workspace already exists: {workspace_path}")
 
-    shutil.copytree(args.source, sandbox_path, symlinks=False)
-    _sandbox = sandbox_path
+    if args.source:
+        # Copy source repo into workspace
+        shutil.copytree(args.source, workspace_path, symlinks=False)
+    else:
+        # Create empty workspace and copy seeds
+        workspace_path.mkdir(parents=True)
+
+    if args.seeds:
+        # Copy seed files into workspace (on top of source if both provided)
+        seeds_dir = Path(args.seeds)
+        for item in seeds_dir.iterdir():
+            dest = workspace_path / item.name
+            if item.is_dir():
+                shutil.copytree(item, dest, dirs_exist_ok=True)
+            else:
+                shutil.copy2(item, dest)
+
+    _sandbox = workspace_path
 
     # Register cleanup
     atexit.register(_archive_and_cleanup)
@@ -145,14 +168,14 @@ def main():
     signal.signal(signal.SIGHUP, _handle_signal)
 
     apc_log("INFO", "sandbox_created", "Sandbox ready",
-            {"sandbox": str(sandbox_path), "source": args.source})
+            {"sandbox": str(workspace_path), "source": args.source})
 
     # ── Phase 3: PREPARE ─────────────────────────────────────────
 
     # 3a. Delete files
     if args.delete:
         for f in args.delete.split(","):
-            target = sandbox_path / f.strip()
+            target = workspace_path / f.strip()
             if target.exists():
                 if target.is_dir():
                     shutil.rmtree(target)
@@ -167,7 +190,7 @@ def main():
     if args.inject:
         inject_dir = Path(args.inject)
         for item in inject_dir.iterdir():
-            dest = sandbox_path / item.name
+            dest = workspace_path / item.name
             if item.is_dir():
                 shutil.copytree(item, dest, dirs_exist_ok=True)
             else:
@@ -182,7 +205,7 @@ def main():
                 continue
             if verbose:
                 print(f"  Setup: {cmd}")
-            result = subprocess.run(cmd, shell=True, cwd=sandbox_path,
+            result = subprocess.run(cmd, shell=True, cwd=workspace_path,
                                     capture_output=True, text=True)
             if result.returncode != 0:
                 apc_log("WARN", "setup_failed", f"Setup failed: {cmd}",
@@ -193,7 +216,7 @@ def main():
         apc_log("DEBUG", "setup_complete", "Setup finished")
 
     # 3d. Swap .claude/
-    claude_dir = sandbox_path / ".claude"
+    claude_dir = workspace_path / ".claude"
     if claude_dir.exists():
         shutil.rmtree(claude_dir)
     config_path = Path(args.config)
@@ -209,7 +232,7 @@ def main():
     for emitter in ["_apc.py", "_apc.ts"]:
         src = SCRIPTS_DIR / emitter
         if src.exists():
-            shutil.copy2(src, sandbox_path / emitter)
+            shutil.copy2(src, workspace_path / emitter)
 
     # 3f. Pre-flight resource check
     ok, snapshot = check_preflight()
@@ -221,7 +244,7 @@ def main():
             f"Run 'python3 scripts/system_monitor.py' to see details.")
 
     # 3g. Exclude sandbox from Spotlight indexing
-    Path(sandbox_path / ".metadata_never_index").touch()
+    Path(workspace_path / ".metadata_never_index").touch()
 
     # ── Phase 4: EXECUTE ─────────────────────────────────────────
     prompt_text = Path(args.prompt_file).read_text()
@@ -245,7 +268,7 @@ def main():
                  "--dangerously-skip-permissions",
                  "--max-budget-usd", args.budget,
                  "--model", args.model],
-                cwd=sandbox_path,
+                cwd=workspace_path,
                 stdout=out_f,
                 stderr=err_f,
             )
@@ -304,11 +327,11 @@ def main():
     # ── Phase 6: VERIFY ──────────────────────────────────────────
     result_str = "N/A"
     if args.verify:
-        shutil.copy2(args.verify, sandbox_path / "verify.sh")
+        shutil.copy2(args.verify, workspace_path / "verify.sh")
 
         vresult = subprocess.run(
             ["bash", "verify.sh"],
-            cwd=sandbox_path,
+            cwd=workspace_path,
             capture_output=True, text=True,
             env={**os.environ, "PORT": str(port), "AGENT_SPEC_RUN_ID": run_id},
         )
