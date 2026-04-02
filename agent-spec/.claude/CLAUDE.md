@@ -1,5 +1,7 @@
 # agent-spec
 
+**Tests must terminate on deterministic, verifiable conditions — never on subjective judgment.** `verify.sh` outputs `RESULT: PASS` or `RESULT: FAIL`. The agent does not decide if it is done. The test decides. If you cannot write a deterministic verification, you do not have a test.
+
 ## What This Is
 
 agent-spec tests and improves `.claude/` directories. Given any project, it sandboxes it, runs agents against it, scores results, and uses that signal to iteratively improve the project's CLAUDE.md, rules, skills, hooks, and agents — until autonomous agents succeed without human intervention.
