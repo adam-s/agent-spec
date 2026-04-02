@@ -11,6 +11,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import time
 import uuid
 from pathlib import Path
 
@@ -22,7 +23,7 @@ from lib import (
     track_pid, _stop_process_tree,
     DIM, RESET, _IS_TTY,
 )
-from system_monitor import check_preflight
+from system_monitor import check_preflight, get_disk_usage, get_memory_usage
 
 # ── Globals for cleanup ──────────────────────────────────────────
 
@@ -250,10 +251,22 @@ def main():
             )
             track_pid(_agent_proc.pid, port, "agent")
 
-            try:
-                _agent_proc.wait(timeout=timeout)
-            except subprocess.TimeoutExpired:
-                _stop_process_tree(_agent_proc.pid, "agent")
+            deadline = time.time() + timeout
+            resource_tick = 0
+            while _agent_proc.poll() is None:
+                if time.time() > deadline:
+                    _stop_process_tree(_agent_proc.pid, "agent")
+                    break
+                resource_tick += 1
+                if resource_tick >= 30:  # every 30 ticks × 2s = 60s
+                    resource_tick = 0
+                    disk = get_disk_usage()
+                    mem = get_memory_usage()
+                    if disk["status"] == "CRITICAL" or mem["status"] == "CRITICAL":
+                        apc_log("WARN", "resource_warning",
+                                f"CRITICAL during run: disk {disk['free_gb']}GB, mem {mem['pct']:.0f}%",
+                                {"disk_free_gb": disk["free_gb"], "mem_pct": mem["pct"]})
+                time.sleep(2)
 
         exit_code = _agent_proc.returncode if _agent_proc.returncode is not None else 124
 

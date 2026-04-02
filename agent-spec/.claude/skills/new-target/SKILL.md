@@ -8,6 +8,8 @@ argument-hint: <name>
 
 Scaffolds a target directory with template files.
 
+See @.claude/reference/target-definition.md for the full target schema and conventions.
+
 ## Steps
 
 Create these files in `targets/$1/`:

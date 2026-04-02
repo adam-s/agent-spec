@@ -2,12 +2,7 @@
 
 ## Targets
 
-Each target is a directory in `targets/` with:
-
-- `target.yaml` — source repo path, verify script, setup commands, agent settings
-- `prompt.md` — the task given to the agent
-- `verify.sh` — scoring script that prints `RESULT: PASS` or `RESULT: FAIL`
-- `configs/` — `.claude/` directories to swap in (each is a test variant)
+See @.claude/reference/target-definition.md for the full target schema, field reference, and conventions.
 
 ## Sandbox Lifecycle
 
@@ -39,25 +34,7 @@ To add custom injections, put files in `targets/<name>/inject/` and add copy com
 
 ## Scoring Contract
 
-verify.sh must:
-- Exit 0 (even on test failure — exit code is not the scoring mechanism)
-- Print test output to stdout
-- Print exactly `RESULT: PASS` or `RESULT: FAIL` as the final verdict
-- If no RESULT line is found, the harness records `N/A` (not FAIL)
-
-## Hidden Output Format Contracts
-
-verify.sh often greps for specific strings in test output (e.g., `"5/5 tests passed"`). This creates a **hidden contract** between the test file's output format and verify.sh's expectations. When `delete_before_run` removes test files, the agent recreates them with different phrasing, and verify.sh breaks — even though all tests actually pass.
-
-**When diagnosing failures where verify.sh reports FAIL or N/A but the produced code looks correct:**
-1. Read verify.sh — what strings does it grep for?
-2. Read the agent's test file — what does it actually print?
-3. The mismatch IS the bug. Fix it in the config by documenting the expected output format.
-
-**When writing configs for targets with deleted test files:**
-- Tell the agent the exact test output format that verify.sh expects
-- Use conditional instructions: "If test.py exists, read it. If not, create it with this format: ..."
-- See `targets/csv-reporter/configs/tuned/CLAUDE.md` for a working example
+verify.sh must exit 0 always and print `RESULT: PASS` or `RESULT: FAIL`. See @.claude/reference/target-definition.md for the full verify.sh contract, hidden output format contracts, and how to handle them in configs.
 
 ## Agent Timeout
 

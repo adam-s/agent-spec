@@ -32,7 +32,7 @@ from lib import (
     load_events, get_event, track_pid, stop_tracked_pids,
     StatusLine, _color, GREEN, RED, RESET, DIM, BOLD, _IS_TTY,
 )
-from system_monitor import check_preflight, get_memory_usage
+from system_monitor import check_preflight, get_disk_usage, get_memory_usage
 
 
 def _parse_log_for_result(log_file: str) -> tuple[str | None, str, float]:
@@ -224,6 +224,7 @@ def main(args=None):
     # ── Poll loop ────────────────────────────────────────────────
     is_tty = _IS_TTY
     finished = [False] * total
+    resource_tick = 0
 
     while not all(finished):
         for i, (proc, status) in enumerate(zip(procs, statuses)):
@@ -250,6 +251,20 @@ def main(args=None):
                     # Re-render finished line (already has newline from finish())
                     sys.stderr.write("\n")
             sys.stderr.flush()
+
+        # Periodic resource check
+        resource_tick += 1
+        if resource_tick >= 30:  # every 30 ticks × 2s = 60s
+            resource_tick = 0
+            disk = get_disk_usage()
+            mem = get_memory_usage()
+            if disk["status"] == "CRITICAL" or mem["status"] == "CRITICAL":
+                apc_log("WARN", "resource_warning",
+                        f"CRITICAL: disk {disk['free_gb']}GB free, memory {mem['pct']:.0f}%",
+                        {"disk_free_gb": disk["free_gb"], "mem_pct": mem["pct"]},
+                        run_id=parallel_id)
+                print(f"  WARNING: Resources critical — disk {disk['free_gb']}GB free, "
+                      f"memory {mem['pct']:.0f}%", file=sys.stderr)
 
         time.sleep(2)
 
