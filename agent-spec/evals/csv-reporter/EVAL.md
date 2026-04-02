@@ -1,3 +1,18 @@
+---
+name: csv-reporter
+description: Test agent's ability to write a Python data analysis script from a test file
+source: ../../../csv-reporter
+model: claude-haiku-4-5-20251001
+budget: 1.00
+delete:
+  - report.py
+  - test.py
+reference:
+  type: test-file
+  file: test.py
+  pass_pattern: "5/5 tests passed"
+---
+
 Write report.py that reads data/sales.csv and prints these 5 statistics:
 
 1. Total Revenue (format: $X.XX)

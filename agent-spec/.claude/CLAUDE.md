@@ -39,7 +39,7 @@ Use existing skills and scripts — do not reimplement. See @.claude/reference/o
 
 Before launching any eval or parallel run, confirm with the user. See @.claude/rules/resource-safety.md.
 
-Key skills: `/run-eval`, `/iterate`, `/report`, `/stop`, `/new-target`
+Key skills: `/run-eval`, `/iterate`, `/report`, `/stop`, `/new-eval`
 
 ## Key Concepts
 
@@ -47,6 +47,7 @@ Key skills: `/run-eval`, `/iterate`, `/report`, `/stop`, `/new-target`
 - **Ports** 3100-3110 allocated per run; use `__PORT__` in prompt.md
 - **Cordyceps** — delete, inject, or swap any file in sandbox before the agent sees it
 - **Component design** — see @.claude/reference/component-design.md for the diagnostic framework
+- **EVAL.md** — each eval is defined by an EVAL.md with YAML frontmatter + markdown prompt. See @.claude/reference/eval-definition.md
 
 ## Git
 

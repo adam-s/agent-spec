@@ -1,18 +1,18 @@
 ---
 name: run-eval
-description: Run an evaluation against a target with a specific config
-argument-hint: <target> [config] [--model MODEL] [--keep]
+description: Run an evaluation against an eval with a specific config
+argument-hint: <eval> [config] [--model MODEL] [--keep]
 ---
 
 # /run-eval — Run an evaluation
 
-Run a Claude agent against a target project in an isolated sandbox, then score the result.
+Run a Claude agent against a project in an isolated sandbox, then score the result.
 
 ## Before Starting
 
 Confirm with the user:
 
-1. Target and config to run
+1. Eval and config to run
 2. Single run or parallel (default: single)
 3. If parallel: how many instances (default: 1)
 
@@ -20,45 +20,35 @@ Do NOT launch until the user confirms.
 
 ## Arguments
 
-- `$1` — target name (directory name in `targets/`, e.g., `csv-reporter`)
-- `$2` — config name (directory name in `targets/<target>/configs/`, default: `baseline`)
-- `--model <name>` — override model (default from target.yaml)
+- `$1` — eval name (directory name in `evals/`, e.g., `csv-reporter`)
+- `$2` — config name (directory name in `evals/<eval>/configs/`, default: `baseline`)
+- `--model <name>` — override model (default from EVAL.md frontmatter)
 - `--keep` — keep sandbox after completion for inspection
 - `--budget <usd>` — override budget
 
 ## Steps
 
-1. Read `targets/$1/target.yaml` to get source path, verify script, setup commands, and agent settings
-2. Resolve the source path relative to the targets directory
-3. Run the evaluation:
+1. Read `evals/$1/EVAL.md` frontmatter to get source path, model, budget, setup commands, delete list, and reference
+2. Extract the prompt from the EVAL.md body (everything after the second `---`)
+3. Resolve the source path relative to the evals directory
+4. Run the evaluation:
 
 ```bash
-# Parse target.yaml (read source, model, budget, setup, delete_before_run)
-TARGET_DIR="$CLAUDE_PROJECT_DIR/targets/$1"
-CONFIG_DIR="$TARGET_DIR/configs/${2:-baseline}"
-PROMPT_FILE="$TARGET_DIR/prompt.md"
-VERIFY_FILE="$TARGET_DIR/verify.sh"
+EVAL_DIR="$CLAUDE_PROJECT_DIR/evals/$1"
+CONFIG_DIR="$EVAL_DIR/configs/${2:-baseline}"
+VERIFY_FILE="$EVAL_DIR/verify.sh"
 
-# Call invoke.sh
+# Parse EVAL.md frontmatter for source, model, budget
 python3 "$CLAUDE_PROJECT_DIR/scripts/invoke.py" \
-  "$(cd "$TARGET_DIR" && python3 -c "import yaml; print(yaml.safe_load(open('target.yaml'))['source'])" 2>/dev/null || grep 'source:' "$TARGET_DIR/target.yaml" | awk '{print $2}')" \
+  "<source from EVAL.md>" \
   "$CONFIG_DIR" \
-  "$PROMPT_FILE" \
+  "<prompt from EVAL.md body>" \
   --verify "$VERIFY_FILE" \
-  --model "${MODEL:-$(grep 'model:' "$TARGET_DIR/target.yaml" | awk '{print $2}')}" \
-  --budget "${BUDGET:-$(grep 'budget:' "$TARGET_DIR/target.yaml" | awk '{print $2}')}"
+  --model "${MODEL:-<model from EVAL.md>}" \
+  --budget "${BUDGET:-<budget from EVAL.md>}"
 ```
 
-**Important**: Before calling invoke.sh, read target.yaml for `delete_before_run` entries. After the sandbox is created but before the agent runs, delete those files from the sandbox so the agent must produce them.
-
-Since invoke.sh handles sandbox creation internally, you need to:
-1. Read the target.yaml
-2. Call invoke.sh with `--keep` temporarily
-3. The `delete_before_run` files should be handled by modifying invoke.sh or by a pre-step
-
-**Simpler approach**: Just call invoke.sh directly and let the prompt instruct the agent to write the file from scratch. The existing file serves as a reference for the test suite, not as a starting point for the agent.
-
-4. After completion, show the dashboard summary:
+5. After completion, show the dashboard summary:
 
 ```bash
 python3 "$CLAUDE_PROJECT_DIR/scripts/dashboard.py" --latest --summary

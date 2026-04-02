@@ -24,7 +24,7 @@ All targets break at Level 2 deletion (deliverable + test file removed). The age
 
 **Root cause:** verify.sh greps for specific strings in test output (e.g., "5/5 tests passed"). Agent-written tests use different phrasing.
 
-**Fix (proven):** Tell the agent the exact test output format in CLAUDE.md — `PASS:`, `FAIL:`, and `{passed}/{total} tests passed`. Also handle both cases: "if test.py exists read it, if not create it with this format." See `targets/csv-reporter/configs/baseline/CLAUDE.md` for the working example. Converged 0/3 → 3/3 in one iteration depth.
+**Fix (proven):** Tell the agent the exact test output format in CLAUDE.md — `PASS:`, `FAIL:`, and `{passed}/{total} tests passed`. Also handle both cases: "if test.py exists read it, if not create it with this format." See `evals/csv-reporter/configs/baseline/CLAUDE.md` for the working example. Converged 0/3 → 3/3 in one iteration depth.
 
 ## Config Impact on Cost
 

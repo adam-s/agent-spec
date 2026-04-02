@@ -1,3 +1,19 @@
+---
+name: sqlite-window-queries
+description: Test agent's ability to write SQL window function queries with Node.js
+source: ../../../sqlite-window-queries
+model: claude-haiku-4-5-20251001
+budget: 1.00
+delete:
+  - queries.js
+setup:
+  - npm install --silent
+reference:
+  type: test-file
+  file: test.js
+  pass_pattern: "10/10 tests passed"
+---
+
 Write queries.js that creates an in-memory SQLite database from seed.sql and runs 5 window function queries, printing the results as JSON:
 
 1. running_total — SUM(amount) OVER (PARTITION BY customer_id ORDER BY order_date) with running total per customer

@@ -10,7 +10,7 @@ Read @.claude/reference/recursive-training.md first. You are Level 0.
 
 ## Parameters
 
-This skill is a generalized iteration engine. It works with ANY target that has a `target.yaml` and a `verify.sh` producing `RESULT: PASS` or `RESULT: FAIL`.
+This skill is a generalized iteration engine. It works with ANY target that has a `EVAL.md` and a `verify.sh` producing `RESULT: PASS` or `RESULT: FAIL`.
 
 ```
 iterate(target, config, stop_condition, depth=0, max_depth=N):
@@ -23,8 +23,8 @@ iterate(target, config, stop_condition, depth=0, max_depth=N):
 ```
 
 **Inputs:**
-- `target` — a directory in `targets/` with `target.yaml`, `prompt.md`, `verify.sh`
-- `config` — a `.claude/` directory variant in `targets/<target>/configs/`
+- `target` — a directory in `evals/` with `EVAL.md`, `prompt.md`, `verify.sh`
+- `config` — a `.claude/` directory variant in `evals/<target>/configs/`
 - `instances` — how many parallel sandboxes to run (default 3)
 - `max_depth` — maximum iterations before forced stop (default 5)
 
@@ -37,7 +37,7 @@ The improved `target/.claude/` directory and a results summary.
 
 ## Before Starting — Ask the User
 
-1. **Which target?** Must exist in `targets/`. Read `target.yaml` to confirm.
+1. **Which target?** Must exist in `evals/`. Read `EVAL.md` to confirm.
 2. **How many parallel instances?** Default 3. Ask if the user wants different stimuli per instance (wireframes, varied prompts, etc.) or identical runs for statistical coverage.
 3. **Max depth?** Default 5. This is the hard stop — iteration halts even if not converged.
 4. **Cleanup mode?** Full cleanup (default) or keep sandboxes for inspection.

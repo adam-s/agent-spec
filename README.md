@@ -26,7 +26,7 @@ python3 scripts/cli.py run csv-reporter
 python3 scripts/cli.py run csv-reporter --parallel --instances 3
 
 # A/B test two instruction sets
-python3 scripts/cli.py run csv-reporter --parallel --configs baseline,tuned
+python3 scripts/cli.py run csv-reporter --parallel --configs baseline,experimental
 
 # View results
 python3 scripts/cli.py report --all
@@ -47,10 +47,11 @@ The agent never touches your real code.
 
 | Concept | Description |
 | ------- | ----------- |
-| **Target** | A project + task + scoring script |
+| **Eval** | Defined by EVAL.md — frontmatter (config) + body (task prompt) |
 | **Config** | A `.claude/` directory variant to test |
 | **Sandbox** | Disposable copy in `/tmp/claude/agent-spec-{uuid}/` |
 | **Cordyceps** | Modifying the sandbox before the agent sees it |
+| **Baseline** | Stored result from a known-good run — the control measurement |
 | **Verify script** | `verify.sh` that outputs `RESULT: PASS` or `RESULT: FAIL` |
 
 ## Project Structure
@@ -59,15 +60,15 @@ The agent never touches your real code.
 agent-spec/                    # Repository root
 ├── agent-spec/                # The harness (this is the product)
 │   ├── scripts/               # Core harness scripts
-│   ├── targets/               # Test fixture definitions
+│   ├── evals/                 # Evaluation definitions (EVAL.md + verify.sh + configs)
 │   └── .claude/               # agent-spec's own instructions
 │       ├── rules/             # Always-loaded behavioral rules
 │       ├── skills/            # On-demand procedures (/iterate, /run-eval, etc.)
 │       ├── reference/         # Deep docs including component design framework
 │       └── hooks/             # Mechanical enforcement scripts
-├── csv-reporter/              # Target: test fixture
-├── hono-websocket-counter/    # Target: test fixture
-└── sqlite-window-queries/     # Target: test fixture
+├── csv-reporter/              # Source project: test fixture
+├── hono-websocket-counter/    # Source project: test fixture
+└── sqlite-window-queries/     # Source project: test fixture
 ```
 
 ## Requirements

@@ -1,9 +1,0 @@
-name: csv-reporter
-source: ../../../csv-reporter
-verify: verify.sh
-delete_before_run:
-  - report.py
-  - test.py
-agent:
-  model: claude-haiku-4-5-20251001
-  budget: 1.00
