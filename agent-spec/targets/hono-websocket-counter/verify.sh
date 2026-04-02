@@ -2,7 +2,7 @@
 set -euo pipefail
 PORT="${PORT:-3100}"
 
-# Find and start the server
+# Find server file
 SERVER_FILE=""
 for f in server.ts index.ts server.js index.js; do
   [[ -f "$f" ]] && SERVER_FILE="$f" && break
