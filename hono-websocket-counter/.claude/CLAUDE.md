@@ -2,14 +2,13 @@
 
 Build web applications with Hono framework on Bun runtime.
 
-## Critical Rules
+## Rules
 
-- **NEVER** overwrite test.js — it contains the definitive test suite you must pass
-- **NEVER** modify mock data JSON files — they are the source of truth
-- **ALWAYS** read test.js FIRST before writing server.ts — understand what tests expect
-- **ALWAYS** read any JSON data files to understand the data structure
-- **ALWAYS** read the prompt FIRST to find the port number — parse it from the task description
+- Read test.js FIRST before writing server.ts — understand what tests expect
+- Read any JSON data files to understand the data structure
+- Read the prompt FIRST to find the port number — parse it from the task description
 - If a `wireframe.png` exists in the project root, read it and match its visual style
+- test.js and data files are protected by permissions — you cannot overwrite them
 
 ## Implementation
 

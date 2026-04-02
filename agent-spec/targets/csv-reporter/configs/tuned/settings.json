@@ -1,0 +1,5 @@
+{
+  "permissions": {
+    "deny": ["Edit(data/*)", "Write(data/*)"]
+  }
+}

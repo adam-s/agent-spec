@@ -1,12 +1,11 @@
 # Node.js SQLite Project
 
-## Critical Rules
+## Rules
 
-- **NEVER** overwrite test.js — it contains the definitive test suite you must pass
-- **NEVER** modify seed.sql — it is the source of truth for the database schema and data
-- **ALWAYS** read test.js FIRST before writing queries.js — understand what tests expect
-- **ALWAYS** read seed.sql to understand the table schema and sample data
-- **ALWAYS** read the prompt to understand the exact JSON output format required
+- Read test.js FIRST before writing queries.js — understand what tests expect
+- Read seed.sql to understand the table schema and sample data
+- Read the prompt to understand the exact JSON output format required
+- test.js and seed.sql are protected by permissions — you cannot overwrite them
 
 ## Implementation
 
