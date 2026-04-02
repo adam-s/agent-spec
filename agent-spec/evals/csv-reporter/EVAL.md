@@ -11,6 +11,13 @@ reference:
   type: test-file
   file: test.py
   pass_pattern: "5/5 tests passed"
+task_context:
+  output_contract: "{passed}/{total} tests passed"
+  required_reads:
+    - test.py
+    - data/sales.csv
+  protected_files:
+    - data/*
 ---
 
 Write report.py that reads data/sales.csv and prints these 5 statistics:

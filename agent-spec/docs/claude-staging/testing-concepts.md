@@ -28,7 +28,7 @@ Traditional assertions check return values. Agent assertions check produced arti
 | `afterAll` / `afterEach` | **EXIT trap** — sandbox cleanup, process termination | invoke.py EXIT trap |
 | Test isolation (fresh state) | **Sandbox** — disposable copy in `/tmp/claude/agent-spec-{uuid}/` | Every run gets a fresh copy |
 | Docker / containers | **Sandboxes + port allocation** — lighter weight, same isolation idea | Port range 3100-3110 |
-| Shared fixtures across tests | **`targets/_shared/configs/`** — configs reusable across targets | Shared config directory |
+| Shared fixtures across tests | **Multiple configs per eval** — each eval has its own configs | `evals/<name>/configs/` |
 
 ### Where the analogy breaks
 

@@ -12,6 +12,14 @@ reference:
   type: test-file
   file: test.js
   pass_pattern: "10/10 tests passed"
+task_context:
+  output_contract: "10/10 tests passed"
+  required_reads:
+    - test.js
+    - seed.sql
+  protected_files:
+    - test.js
+    - seed.sql
 ---
 
 Write queries.js that creates an in-memory SQLite database from seed.sql and runs 5 window function queries, printing the results as JSON:

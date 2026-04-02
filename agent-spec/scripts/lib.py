@@ -326,21 +326,12 @@ list_targets = list_evals
 
 
 def list_configs(eval_name: str) -> list[str]:
-    """Return sorted list of config names for an eval (eval-specific + shared)."""
+    """Return sorted list of config names for an eval."""
     evals_dir = PROJECT_DIR / "evals"
-    configs = set()
-
-    # Eval-specific
     tc = evals_dir / eval_name / "configs"
-    if tc.is_dir():
-        configs.update(d.name for d in tc.iterdir() if d.is_dir())
-
-    # Shared
-    sc = evals_dir / "_shared" / "configs"
-    if sc.is_dir():
-        configs.update(d.name for d in sc.iterdir() if d.is_dir())
-
-    return sorted(configs)
+    if not tc.is_dir():
+        return []
+    return sorted(d.name for d in tc.iterdir() if d.is_dir())
 
 
 # ── ANSI Colors ─────────────────────────────────────────────────

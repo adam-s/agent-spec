@@ -36,13 +36,11 @@ def main(args=None):
         available = list_evals()
         die(f"Eval '{args.eval}' not found. Available: {', '.join(available) if available else 'none'}")
 
-    # Resolve config: eval-specific first, then _shared
+    # Resolve config
     config_dir = eval_dir / "configs" / args.config
     if not config_dir.is_dir():
-        config_dir = PROJECT_DIR / "evals" / "_shared" / "configs" / args.config
-        if not config_dir.is_dir():
-            available = list_configs(args.eval)
-            die(f"Config '{args.config}' not found. Available: {', '.join(available) if available else 'none'}")
+        available = list_configs(args.eval)
+        die(f"Config '{args.config}' not found. Available: {', '.join(available) if available else 'none'}")
 
     # Parse EVAL.md
     eval_file = eval_dir / "EVAL.md"

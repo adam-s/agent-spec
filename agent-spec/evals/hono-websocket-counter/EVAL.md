@@ -13,6 +13,12 @@ reference:
   type: test-file
   file: test.js
   pass_pattern: "tests passed"
+task_context:
+  output_contract: "tests passed"
+  required_reads:
+    - test.js
+  protected_files:
+    - test.js
 ---
 
 Write server.ts — a Hono app on Bun (port __PORT__) that:

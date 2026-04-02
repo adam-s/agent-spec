@@ -2,6 +2,38 @@
 
 An eval is defined by an EVAL.md file with YAML frontmatter (configuration) and a markdown body (the task prompt). This follows the same pattern as SKILL.md and AGENT.md in Claude Code.
 
+## The Eval-Config Relationship
+
+An eval defines the experiment: what project, what task, what success looks like. A config defines how to instruct the agent. The eval is the constant; configs are the variable.
+
+```
+EVAL.md (the experiment)
+  │
+  ├── What to sandbox (source)
+  ├── What to delete (cordyceps)
+  ├── What success looks like (reference + verify.sh)
+  ├── The task prompt (body)
+  │
+  └── task_context:                    ← the bridge
+        output_contract: "5/5 tests passed"
+        required_reads: [test.py, data/sales.csv]
+        protected_files: [test.py, data/*]
+```
+
+```
+configs/<name>/ (the variable)
+  │
+  ├── CLAUDE.md — instruction style (the thing being tested)
+  ├── settings.json — permissions
+  ├── rules/, skills/, hooks/ — optional components
+  │
+  └── MUST include task_context from EVAL.md
+```
+
+**The dependency:** configs are not independent of the eval. Every config must include the eval's task context — the output format contract, required reads, and protected files. Without this, the agent produces correct code but in a format verify.sh doesn't recognize, causing false FAILs.
+
+**In config comparison experiments:** each config varies the instruction STYLE (concise vs structured vs workflow-gated) but shares the same task CONTEXT. The style is the independent variable; the task context is the constant.
+
 ## Directory Layout
 
 ```
@@ -9,9 +41,10 @@ evals/<name>/
 ├── EVAL.md                    # Definition: frontmatter (config) + body (prompt)
 ├── verify.sh                  # Scoring script (must be executable)
 ├── configs/
-│   └── baseline/
-│       ├── CLAUDE.md          # Agent instructions for this config
-│       └── settings.json      # Permissions for this config
+│   ├── baseline/
+│   │   ├── CLAUDE.md          # Agent instructions for this config
+│   │   └── settings.json      # Permissions for this config
+│   └── <other-configs>/       # Additional configs for comparison
 └── inject/                    # (optional) Files copied into sandbox
 ```
 
@@ -35,6 +68,13 @@ reference:
   type: test-file
   file: test.py
   pass_pattern: "5/5 tests passed"
+task_context:
+  output_contract: "{passed}/{total} tests passed"
+  required_reads:
+    - test.py
+    - data/sales.csv
+  protected_files:
+    - data/*
 ---
 
 Write report.py that reads data/sales.csv and prints these 5 statistics...
@@ -53,6 +93,17 @@ Write report.py that reads data/sales.csv and prints these 5 statistics...
 | `setup` | No | list | Shell commands run inside sandbox before agent starts. |
 | `port` | No | integer | Port to allocate. `__PORT__` in body gets substituted. |
 | `reference` | No | object | What defines success. See reference types below. |
+| `task_context` | No | object | Task-specific context every config must include. See below. |
+
+### task_context
+
+The bridge between the eval and its configs. When the orchestrator creates configs for this eval, it must include this context in every config's CLAUDE.md:
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `output_contract` | string | The exact output format verify.sh greps for. |
+| `required_reads` | list | Files the agent should read before writing code. |
+| `protected_files` | list | Files the agent must not modify (becomes permissions.deny). |
 
 ### Body
 
@@ -104,15 +155,29 @@ The scoring script. Must follow the scoring contract:
 
 When verify.sh greps for specific strings in test output (e.g., `"5/5 tests passed"`), this creates a hidden contract. If `delete` removes test files and the agent recreates them with different phrasing, verify.sh breaks even though all tests actually pass.
 
-**Fix this in the config**, not in verify.sh. Tell the agent the exact output format that verify.sh expects.
+This is why `task_context.output_contract` exists — it makes the hidden contract explicit so every config can include it.
 
 ## Configs
 
-Each config is a `.claude/` directory swapped into the sandbox. The agent sees only the config's instructions.
+Each config is a `.claude/` directory swapped into the sandbox. The agent sees only the config's instructions. Configs live inside the eval: `evals/<eval>/configs/<config>/`
 
-**Naming:** `baseline` is the control config. Additional configs for A/B testing (e.g., `structured`, `token-efficient`).
+**Naming:** `baseline` is the control config. Additional configs for A/B testing vary the instruction style.
 
-The CLAUDE.md inside a config should:
-- Tell the agent to read existing files before writing (especially test files)
-- Document output format contracts that verify.sh depends on
-- Use permissions.deny in settings.json for files the agent must not modify
+### Every config must include task context
+
+A config is NOT just generic coding rules. It must include the eval's task context:
+
+1. **Output contract** — the exact format verify.sh expects
+2. **Required reads** — files the agent should read before writing
+3. **Protected files** — files the agent must not modify (in settings.json permissions.deny)
+
+Without task context, the agent produces correct code in a format verify.sh doesn't recognize. This causes false FAILs — the code works but the eval reports failure.
+
+### Config comparison experiments
+
+When comparing multiple configs, each config varies the instruction STYLE but shares the same task CONTEXT:
+
+- **Variable (what differs):** CLAUDE.md structure, rules, skills, hooks — the instruction philosophy
+- **Constant (what's shared):** output contract, required reads, protected files — the task knowledge
+
+The experiment measures which instruction style produces the best cost-to-correctness for the same task.

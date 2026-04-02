@@ -74,10 +74,7 @@ def cmd_list(args):
         print(f"{eval_name}{suffix}")
         configs = list_configs(eval_name)
         for c in configs:
-            # Mark shared vs eval-specific
-            tc = PROJECT_DIR / "evals" / eval_name / "configs" / c
-            label = "" if tc.is_dir() else " (shared)"
-            print(f"  {c}{label}")
+            print(f"  {c}")
     print()
 
 

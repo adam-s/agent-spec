@@ -175,8 +175,7 @@ def main(args=None):
         # Resolve config
         config_dir = target_dir / "configs" / v_config
         if not config_dir.is_dir():
-            config_dir = PROJECT_DIR / "evals" / "_shared" / "configs" / v_config
-            require_dir(config_dir, f"Config '{v_config}' not found in target or _shared")
+            die(f"Config '{v_config}' not found in evals/{args.target}/configs/")
 
         # Stimuli injection
         inject_dir = None

@@ -37,9 +37,9 @@ Every common operation has a script or skill. Before writing any bash to sandbox
 
 ## Config resolution
 
-Configs are resolved in order:
-1. `evals/<eval>/configs/<config>/` (eval-specific)
-2. `evals/_shared/configs/<config>/` (shared across evals)
+Configs live inside the eval: `evals/<eval>/configs/<config>/`
+
+Each config is a complete `.claude/` directory that gets swapped into the sandbox. Every config MUST include task-specific context — especially the output format contract that verify.sh depends on. Generic configs without task context will fail because the agent produces output in a different format than verify.sh expects.
 
 ## Workflow patterns
 
