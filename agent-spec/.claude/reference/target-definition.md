@@ -52,20 +52,6 @@ agent:
   budget: 2.00
 ```
 
-Self-targets point at agent-spec itself:
-
-```yaml
-name: self-diagnose
-source: ../../
-verify: verify.sh
-setup:
-  - mkdir -p /tmp/agent-spec/failed-csv-run
-  - cp targets/self-diagnose/inject/fake-run/events.jsonl /tmp/agent-spec/failed-csv-run/events.jsonl
-agent:
-  model: claude-haiku-4-5-20251001
-  budget: 1.00
-```
-
 ## prompt.md
 
 The task description given verbatim to the agent via `claude -p`.

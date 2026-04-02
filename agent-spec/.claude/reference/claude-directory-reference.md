@@ -1,6 +1,6 @@
 # .claude/ Directory Reference
 
-Source: https://code.claude.com/docs/en/
+Source: https://code.claude.com/docs/en/ — for working examples, see the 13 official plugins at [github.com/anthropics/claude-code/plugins/](https://github.com/anthropics/claude-code/tree/main/plugins) (especially `plugin-dev` for skill/hook patterns) and `examples/hooks/` in the same repo.
 
 ## Configuration Scopes (Priority Order)
 

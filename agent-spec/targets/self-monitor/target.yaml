@@ -1,7 +1,0 @@
-name: self-monitor
-source: ../../
-verify: verify.sh
-
-agent:
-  model: claude-haiku-4-5-20251001
-  budget: 1.00

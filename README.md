@@ -1,26 +1,23 @@
 # agent-spec
 
-Deterministic test harness for Claude Code agents and skills.
+Test harness for `.claude/` directories. agent-spec takes any project, sandboxes it, runs agents against it, and uses the signal to iteratively improve the project's `.claude/` — until autonomous agents succeed without human intervention.
 
-agent-spec takes any project, launches autonomous agents in disposable sandboxes, scores their output, and uses failures as signal to iteratively improve the project's `.claude/` instructions — until agents succeed without human intervention.
+## Three Testing Layers
 
-```mermaid
-flowchart LR
-    A[Your .claude/ instructions] -->|swap into| B[Disposable sandbox]
-    B -->|agent runs| C[Code produced]
-    C -->|verify.sh| D{PASS / FAIL}
-    D -->|fail| E[Diagnose + fix instructions]
-    E --> A
-    D -->|pass| F[Done]
-```
+1. **Output testing** — Did the agent produce correct results? Sandbox → run → verify → pass/fail.
+2. **Config testing** — Is the `.claude/` well-designed? Score against the component decision tree.
+3. **Behavior testing** — Did the agent make good decisions? Analyze event traces for tool choices and efficiency.
+
+## Recursive Architecture
+
+- **Level 0 (Orchestrator):** Human + agent-spec. Launches agents, scores, diagnoses, fixes instructions.
+- **Level 1 (Sub-agents):** Disposable Claude instances in sandboxes. Their behavior is the signal.
+- **Level 2 (The Product):** The `.claude/` directory. Must be self-sufficient — no knowledge of agent-spec.
 
 ## Quick Start
 
 ```bash
 cd agent-spec/agent-spec
-
-# See what's available
-python3 scripts/cli.py list
 
 # Run an evaluation
 python3 scripts/cli.py run csv-reporter
@@ -35,64 +32,42 @@ python3 scripts/cli.py run csv-reporter --parallel --configs baseline,tuned
 python3 scripts/cli.py report --all
 ```
 
-## What It Does
+## How It Works
 
-1. **Copies** your project to a temporary sandbox
-2. **Swaps** `.claude/` with a config variant you want to test
+1. **Copies** your project to a disposable sandbox
+2. **Swaps** `.claude/` with the config variant under test
 3. **Deletes** key files so the agent must produce them (cordyceps injection)
 4. **Runs** `claude -p` with your prompt inside the sandbox
 5. **Scores** the result with a deterministic `verify.sh` script
 6. **Reports** PASS/FAIL with cost and token metrics
 
-The agent never touches your real code. Only the disposable sandbox is modified.
-
-## The Iterate Loop
-
-The real power is automated iteration. The `/iterate` skill:
-
-1. Launches N parallel agents against your target
-2. Scores each run
-3. Reads failures and classifies them
-4. Patches your `.claude/` instructions to close the gaps
-5. Repeats until all agents pass consistently
-
-```bash
-# Inside Claude Code
-/iterate csv-reporter
-```
-
-## Documentation
-
-- [Getting Started](agent-spec/docs/getting-started.md) — First run in 2 minutes
-- [Architecture](agent-spec/docs/architecture.md) — How the system works, with diagrams
-- [Writing Targets](agent-spec/docs/writing-targets.md) — Add your own project as a test target
-- [CLI Reference](agent-spec/docs/cli-reference.md) — Every command and flag
+The agent never touches your real code.
 
 ## Key Concepts
 
-| Concept           | Description                                                |
-| ----------------- | ---------------------------------------------------------- |
-| **Target**        | A project + task + scoring script                          |
-| **Config**        | A `.claude/` directory variant to test                     |
-| **Sandbox**       | Disposable copy of the project in `/tmp/`                  |
-| **Cordyceps**     | Modifying the sandbox before the agent sees it             |
+| Concept | Description |
+| ------- | ----------- |
+| **Target** | A project + task + scoring script |
+| **Config** | A `.claude/` directory variant to test |
+| **Sandbox** | Disposable copy in `/tmp/claude/agent-spec-{uuid}/` |
+| **Cordyceps** | Modifying the sandbox before the agent sees it |
 | **Verify script** | `verify.sh` that outputs `RESULT: PASS` or `RESULT: FAIL` |
 
 ## Project Structure
 
 ```text
-agent-spec/
-├── scripts/           # Core harness
-│   ├── cli.py         # Unified CLI entry point
-│   ├── invoke.py      # Single run: sandbox → agent → verify
-│   ├── parallel.py    # Multi-run: A/B tests, benchmarks
-│   ├── dashboard.py   # Live monitoring
-│   └── report.py      # Comparison reports
-├── targets/           # Test fixtures
-│   ├── _shared/       # Configs shared across targets
-│   └── csv-reporter/  # Example target
-├── docs/              # Documentation
-└── .claude/           # agent-spec's own instructions
+agent-spec/                    # Repository root
+├── agent-spec/                # The harness (this is the product)
+│   ├── scripts/               # Core harness scripts
+│   ├── targets/               # Test fixture definitions
+│   └── .claude/               # agent-spec's own instructions
+│       ├── rules/             # Always-loaded behavioral rules
+│       ├── skills/            # On-demand procedures (/iterate, /run-eval, etc.)
+│       ├── reference/         # Deep docs including component design framework
+│       └── hooks/             # Mechanical enforcement scripts
+├── csv-reporter/              # Target: test fixture
+├── hono-websocket-counter/    # Target: test fixture
+└── sqlite-window-queries/     # Target: test fixture
 ```
 
 ## Requirements

@@ -66,4 +66,4 @@ Shared configs: baseline, token-efficient, structured, workflow, hybrid, drona23
 1. `/new-target`
 2. Set `source:` path in target.yaml
 3. Use `__PORT__` in prompt.md (not a hardcoded port)
-4. Write verify.sh following the scoring contract in @.claude/rules/testing-protocol.md
+4. Write verify.sh following the scoring contract in @.claude/reference/testing-protocol.md
