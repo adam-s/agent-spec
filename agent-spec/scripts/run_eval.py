@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""run_eval.py — Run an evaluation by target name.
+"""run_eval.py — Run an evaluation by eval name.
 
-Usage: python3 scripts/run_eval.py <target> [config] [options]
+Usage: python3 scripts/run_eval.py <eval> [config] [options]
 """
 
 import argparse
@@ -9,19 +9,20 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from lib import (
     PROJECT_DIR, SCRIPTS_DIR, DEFAULT_MODEL, DEFAULT_BUDGET,
-    parse_target_yaml, require_dir, require_file, die,
-    list_targets, list_configs,
+    parse_eval_md, require_dir, require_file, die,
+    list_evals, list_configs,
 )
 
 
 def main(args=None):
-    parser = argparse.ArgumentParser(description="Run eval by target name")
-    parser.add_argument("target", help="Target name (directory in targets/)")
+    parser = argparse.ArgumentParser(description="Run eval by name")
+    parser.add_argument("eval", help="Eval name (directory in evals/)")
     parser.add_argument("config", nargs="?", default="baseline", help="Config name (default: baseline)")
     parser.add_argument("--model", default=None)
     parser.add_argument("--budget", default=None)
@@ -30,35 +31,42 @@ def main(args=None):
     parser.add_argument("--port", type=int, default=None)
     args = args or parser.parse_args()
 
-    target_dir = PROJECT_DIR / "targets" / args.target
-    if not target_dir.is_dir():
-        available = list_targets()
-        die(f"Target '{args.target}' not found. Available: {', '.join(available) if available else 'none'}")
+    eval_dir = PROJECT_DIR / "evals" / args.eval
+    if not eval_dir.is_dir():
+        available = list_evals()
+        die(f"Eval '{args.eval}' not found. Available: {', '.join(available) if available else 'none'}")
 
-    # Resolve config: target-specific first, then _shared
-    config_dir = target_dir / "configs" / args.config
+    # Resolve config: eval-specific first, then _shared
+    config_dir = eval_dir / "configs" / args.config
     if not config_dir.is_dir():
-        config_dir = PROJECT_DIR / "targets" / "_shared" / "configs" / args.config
+        config_dir = PROJECT_DIR / "evals" / "_shared" / "configs" / args.config
         if not config_dir.is_dir():
-            available = list_configs(args.target)
+            available = list_configs(args.eval)
             die(f"Config '{args.config}' not found. Available: {', '.join(available) if available else 'none'}")
 
-    # Parse target.yaml
-    yaml_file = target_dir / "target.yaml"
-    require_file(yaml_file, "No target.yaml")
-    cfg = parse_target_yaml(yaml_file)
+    # Parse EVAL.md
+    eval_file = eval_dir / "EVAL.md"
+    require_file(eval_file, "No EVAL.md")
+    cfg = parse_eval_md(eval_file)
 
     # Resolve source path
-    source_path = (target_dir / cfg["source"]).resolve()
+    source_path = (eval_dir / cfg["source"]).resolve()
     if not source_path.is_dir():
-        die(f"Source repo not found: {cfg['source']} (from {target_dir})")
+        die(f"Source repo not found: {cfg['source']} (from {eval_dir})")
+
+    # Write prompt to temp file (from EVAL.md body)
+    prompt = cfg.get("prompt", "")
+    if not prompt:
+        die("EVAL.md has no prompt body (content after frontmatter)")
 
     # Lint: warn on hardcoded ports
-    prompt_file = target_dir / "prompt.md"
-    if prompt_file.exists():
-        text = prompt_file.read_text()
-        if re.search(r'\b3[01]\d{2}\b', text):
-            print("WARNING: prompt.md may contain hardcoded port — use __PORT__", file=sys.stderr)
+    if re.search(r'\b3[01]\d{2}\b', prompt):
+        print("WARNING: prompt may contain hardcoded port — use __PORT__", file=sys.stderr)
+
+    # Write prompt to a temp file for invoke.py
+    prompt_file = tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False, prefix='eval-prompt-')
+    prompt_file.write(prompt)
+    prompt_file.close()
 
     # Build invoke.py args
     model = args.model or cfg["model"] or DEFAULT_MODEL
@@ -68,14 +76,14 @@ def main(args=None):
         sys.executable, str(SCRIPTS_DIR / "invoke.py"),
         str(source_path),
         str(config_dir),
-        str(target_dir / "prompt.md"),
+        prompt_file.name,
         "--model", model,
         "--budget", budget,
-        "--verify", str(target_dir / cfg["verify"]),
+        "--verify", str(eval_dir / cfg["verify"]),
     ]
 
-    if cfg["delete_before_run"]:
-        invoke_args += ["--delete", ",".join(cfg["delete_before_run"])]
+    if cfg["delete"]:
+        invoke_args += ["--delete", ",".join(cfg["delete"])]
     if cfg["setup"]:
         invoke_args += ["--setup", ";".join(cfg["setup"])]
     if args.keep:

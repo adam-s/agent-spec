@@ -200,35 +200,60 @@ def get_tracked_pids() -> list[dict]:
     return pids
 
 
-# ── YAML Parsing ─────────────────────────────────────────────────
+# ── EVAL.md Parsing ──────────────────────────────────────────────
 
-def parse_target_yaml(path: str | Path) -> dict:
-    """Parse target.yaml using regex. Returns dict with keys:
-    source, verify, model, budget, delete_before_run, setup"""
+def parse_eval_md(path: str | Path) -> dict:
+    """Parse EVAL.md frontmatter (YAML between --- delimiters).
+    Returns dict with keys: source, verify, model, budget, delete, setup, prompt.
+    Also supports legacy target.yaml format for backwards compatibility."""
     text = Path(path).read_text()
 
+    # Check if this is EVAL.md (frontmatter) or legacy target.yaml
+    if text.strip().startswith("---"):
+        # EVAL.md format: split on --- delimiters
+        parts = text.split("---", 2)
+        if len(parts) >= 3:
+            frontmatter = parts[1]
+            prompt = parts[2].strip()
+        else:
+            frontmatter = parts[1] if len(parts) > 1 else ""
+            prompt = ""
+    else:
+        # Legacy target.yaml format
+        frontmatter = text
+        prompt = ""
+
     def get(key, default=""):
-        m = re.search(rf"^{key}:\s*(.+)$", text, re.MULTILINE)
+        m = re.search(rf"^{key}:\s*(.+)$", frontmatter, re.MULTILINE)
         return m.group(1).strip().strip("'\"") if m else default
 
     def get_list(key):
-        m = re.search(rf"^{key}:\s*\n((?:\s+-\s+.+\n)*)", text, re.MULTILINE)
+        # Try both 'key' and legacy 'delete_before_run'
+        m = re.search(rf"^{key}:\s*\n((?:\s+-\s+.+\n)*)", frontmatter, re.MULTILINE)
         if not m:
             return []
         return [line.strip().lstrip("- ") for line in m.group(1).strip().split("\n") if line.strip()]
 
     def get_nested(parent, key, default=""):
-        m = re.search(rf"^{parent}:\s*\n(?:.*\n)*?\s+{key}:\s*(.+)$", text, re.MULTILINE)
+        m = re.search(rf"^{parent}:\s*\n(?:.*\n)*?\s+{key}:\s*(.+)$", frontmatter, re.MULTILINE)
         return m.group(1).strip().strip("'\"") if m else default
+
+    # Support both 'delete' (new) and 'delete_before_run' (legacy)
+    delete = get_list("delete") or get_list("delete_before_run")
 
     return {
         "source": get("source"),
         "verify": get("verify", "verify.sh"),
-        "model": get_nested("agent", "model", ""),
-        "budget": get_nested("agent", "budget", ""),
-        "delete_before_run": get_list("delete_before_run"),
+        "model": get("model") or get_nested("agent", "model", ""),
+        "budget": get("budget") or get_nested("agent", "budget", ""),
+        "delete": delete,
         "setup": get_list("setup"),
+        "prompt": prompt,
     }
+
+
+# Keep old name as alias during migration
+parse_target_yaml = parse_eval_md
 
 
 # ── Output Parsing ───────────────────────────────────────────────
@@ -285,29 +310,33 @@ def now_ms() -> int:
 
 # ── Discovery ───────────────────────────────────────────────────
 
-def list_targets() -> list[str]:
-    """Return sorted list of target names (directories with target.yaml)."""
-    targets_dir = PROJECT_DIR / "targets"
-    if not targets_dir.is_dir():
+def list_evals() -> list[str]:
+    """Return sorted list of eval names (directories with EVAL.md)."""
+    evals_dir = PROJECT_DIR / "evals"
+    if not evals_dir.is_dir():
         return []
     return sorted(
-        d.name for d in targets_dir.iterdir()
-        if d.is_dir() and not d.name.startswith("_") and (d / "target.yaml").exists()
+        d.name for d in evals_dir.iterdir()
+        if d.is_dir() and not d.name.startswith("_") and (d / "EVAL.md").exists()
     )
 
 
-def list_configs(target_name: str) -> list[str]:
-    """Return sorted list of config names for a target (target-specific + shared)."""
-    targets_dir = PROJECT_DIR / "targets"
+# Keep old name as alias during migration
+list_targets = list_evals
+
+
+def list_configs(eval_name: str) -> list[str]:
+    """Return sorted list of config names for an eval (eval-specific + shared)."""
+    evals_dir = PROJECT_DIR / "evals"
     configs = set()
 
-    # Target-specific
-    tc = targets_dir / target_name / "configs"
+    # Eval-specific
+    tc = evals_dir / eval_name / "configs"
     if tc.is_dir():
         configs.update(d.name for d in tc.iterdir() if d.is_dir())
 
     # Shared
-    sc = targets_dir / "_shared" / "configs"
+    sc = evals_dir / "_shared" / "configs"
     if sc.is_dir():
         configs.update(d.name for d in sc.iterdir() if d.is_dir())
 

@@ -28,7 +28,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from lib import (
     PROJECT_DIR, SCRIPTS_DIR, PORT_MIN, PORT_MAX, RUN_ROOT,
     die, require_dir, apc_log, now_ms,
-    list_targets, list_configs, get_baseline_cost,
+    list_evals, list_configs, get_baseline_cost,
     load_events, get_event, track_pid, stop_tracked_pids,
     StatusLine, _color, GREEN, RED, RESET, DIM, BOLD, _IS_TTY,
 )
@@ -95,10 +95,10 @@ def main(args=None):
     parser.add_argument("--verbose", action="store_true")
     args = args or parser.parse_args()
 
-    target_dir = PROJECT_DIR / "targets" / args.target
+    target_dir = PROJECT_DIR / "evals" / args.target
     if not target_dir.is_dir():
-        available = list_targets()
-        die(f"Target '{args.target}' not found. Available: {', '.join(available) if available else 'none'}")
+        available = list_evals()
+        die(f"Eval '{args.target}' not found. Available: {', '.join(available) if available else 'none'}")
 
     # Build variant matrix
     config_list = args.configs.split(",") if args.configs else [args.config]
@@ -175,7 +175,7 @@ def main(args=None):
         # Resolve config
         config_dir = target_dir / "configs" / v_config
         if not config_dir.is_dir():
-            config_dir = PROJECT_DIR / "targets" / "_shared" / "configs" / v_config
+            config_dir = PROJECT_DIR / "evals" / "_shared" / "configs" / v_config
             require_dir(config_dir, f"Config '{v_config}' not found in target or _shared")
 
         # Stimuli injection

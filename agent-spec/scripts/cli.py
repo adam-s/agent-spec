@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from lib import PROJECT_DIR, RUN_ROOT, list_targets, list_configs, load_events, get_event
+from lib import PROJECT_DIR, RUN_ROOT, list_evals, list_configs, load_events, get_event
 
 
 # ── Subcommand handlers ─────────────────────────────────────────
@@ -62,20 +62,20 @@ def cmd_monitor(args):
 
 
 def cmd_list(args):
-    """Discover and list all targets with their configs."""
-    targets = list_targets()
-    if not targets:
-        print("No targets found.")
+    """Discover and list all evals with their configs."""
+    evals = list_evals()
+    if not evals:
+        print("No evals found.")
         return
 
-    for target in targets:
-        last = _latest_result(target)
+    for eval_name in evals:
+        last = _latest_result(eval_name)
         suffix = f"  [{last}]" if last else ""
-        print(f"{target}{suffix}")
-        configs = list_configs(target)
+        print(f"{eval_name}{suffix}")
+        configs = list_configs(eval_name)
         for c in configs:
-            # Mark shared vs target-specific
-            tc = PROJECT_DIR / "targets" / target / "configs" / c
+            # Mark shared vs eval-specific
+            tc = PROJECT_DIR / "evals" / eval_name / "configs" / c
             label = "" if tc.is_dir() else " (shared)"
             print(f"  {c}{label}")
     print()
@@ -107,9 +107,9 @@ def build_parser():
         prog="agent-spec",
         description="Test harness for .claude agents",
         epilog="""examples:
-  agent-spec list                          Show all targets and configs
+  agent-spec list                          Show all evals and configs
   agent-spec run csv-reporter              Run eval with baseline config
-  agent-spec run csv-reporter tuned        Run eval with tuned config
+  agent-spec run csv-reporter experimental Run eval with experimental config
   agent-spec run csv-reporter --parallel --instances 3
   agent-spec status                        Show latest run dashboard
   agent-spec report --all                  Report across all runs
@@ -119,8 +119,8 @@ def build_parser():
     sub = parser.add_subparsers(dest="command")
 
     # ── run ──
-    p_run = sub.add_parser("run", help="Run an evaluation against a target")
-    p_run.add_argument("target", help="Target name (directory in targets/)")
+    p_run = sub.add_parser("run", help="Run an evaluation")
+    p_run.add_argument("target", help="Eval name (directory in evals/)")
     p_run.add_argument("config", nargs="?", default="baseline", help="Config name (default: baseline)")
     p_run.add_argument("--model", default=None, help="Model override")
     p_run.add_argument("--budget", default=None, help="Budget override (USD)")
@@ -173,7 +173,7 @@ def build_parser():
     p_monitor.set_defaults(func=cmd_monitor)
 
     # ── list ──
-    p_list = sub.add_parser("list", help="List all targets and their configs")
+    p_list = sub.add_parser("list", help="List all evals and their configs")
     p_list.set_defaults(func=cmd_list)
 
     return parser
