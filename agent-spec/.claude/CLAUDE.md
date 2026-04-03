@@ -11,7 +11,7 @@ A developer might say: "Compare 6 different .claude/ instruction styles against 
 Three testing layers, each adding signal:
 
 1. **Output testing** — Did the agent produce correct results? Workspace → run → verify → pass/fail.
-2. **Config testing** — Is the `.claude/` directory well-designed? Score against the component decision tree (@.claude/reference/decision-tree.md).
+2. **Config testing** — Is the `.claude/` directory well-designed? Score against the component decision tree (@.claude/reference/components/decision-tree.md).
 3. **Behavior testing** — Did the agent make good decisions? Analyze event traces for tool choices, rule adherence, token efficiency.
 
 The primary metric is **cost-to-correctness** — not just pass/fail, but how many tokens it took to get there.
@@ -29,7 +29,7 @@ agent-spec operates at three nested levels. Understanding which level you're at 
 - Every fix belongs to exactly one level — state "This is a Level N fix because ___" before applying
 - Level 2 must never reference agent-spec
 
-See @.claude/reference/recursive-training.md for full detail, guards, and convergence criteria.
+See @.claude/reference/iteration/recursive-training.md for full detail, guards, and convergence criteria.
 
 ## Self-Improvement Loop
 
@@ -43,7 +43,7 @@ The cycle:
 5. Delete the failed eval artifacts and start fresh — don't patch around failures
 6. Attempt again
 
-**Generalization guard:** Every instruction improvement must be generalized — never specific to a particular bug, library, or error type. If a finding names the domain, it's overfit. Validate improvements against held-out cases that the improvement process has never seen. See @.claude/reference/generalization.md.
+**Generalization guard:** Every instruction improvement must be generalized — never specific to a particular bug, library, or error type. If a finding names the domain, it's overfit. Validate improvements against held-out cases that the improvement process has never seen. See @.claude/reference/iteration/generalization.md.
 
 This is Level 0 self-improvement. The `/iterate` skill improves Level 2 (target `.claude/` directories). This cycle improves Level 0 (the orchestrator's own instructions).
 

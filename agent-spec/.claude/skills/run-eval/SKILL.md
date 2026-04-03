@@ -1,7 +1,7 @@
 ---
 name: run-eval
 description: Run an evaluation against an eval with a specific config
-argument-hint: <eval> [config] [--model MODEL] [--challenge NAME] [--keep]
+argument-hint: <eval> [config] [--model MODEL] [--challenge NAME] [--prompt-variant VARIANT] [--keep]
 ---
 
 # /run-eval — Run an evaluation
@@ -25,6 +25,7 @@ Do NOT launch until the user confirms.
 - `--model <name>` — override model (default from EVAL.md frontmatter)
 - `--budget <usd>` — override budget
 - `--challenge <name>` — run only this challenge (matrix evals)
+- `--prompt-variant <name>` — use `prompt-<name>.md` instead of `prompt.md` (e.g. `--prompt-variant vague`)
 - `--keep` — keep workspace after completion for inspection
 
 ## Steps
@@ -32,7 +33,7 @@ Do NOT launch until the user confirms.
 1. Run the evaluation:
 
 ```bash
-python3 scripts/run_eval.py <eval> <config> [--model MODEL] [--budget USD] [--challenge NAME] [--keep]
+python3 scripts/run_eval.py <eval> <config> [--model MODEL] [--budget USD] [--challenge NAME] [--prompt-variant VARIANT] [--keep]
 ```
 
 `run_eval.py` handles everything: EVAL.md parsing, config resolution, challenge iteration, prompt templating, and invoke.py delegation.

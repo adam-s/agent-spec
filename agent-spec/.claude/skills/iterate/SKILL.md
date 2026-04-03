@@ -6,7 +6,7 @@ argument-hint: <target> [config] [--max-depth N] [--instances N] [--keep]
 
 # /iterate — Recursive Instruction Tuning
 
-Read @.claude/reference/recursive-training.md first. You are Level 0.
+Read @.claude/reference/iteration/recursive-training.md first. You are Level 0.
 
 ## Parameters
 
@@ -131,6 +131,12 @@ RECURSE:
       Level 0 → agent-spec (selective)
       After each fix, consistency-check all .claude/ files at that level.
 
+      **Component escalation:** By default, put Level 2 fixes in CLAUDE.md. If across
+      iterations the same failure repeats despite correct instructions, or CLAUDE.md is
+      growing unwieldy with tangled concerns, consult @.claude/reference/components/decision-tree.md
+      to determine if the fix belongs in a different component (rule, hook, skill,
+      reference doc). This is a diagnosis-driven escalation, not a default.
+
       EMIT: apc_log("INFO", "iteration_fixed", "Fixes applied",
              {"depth": depth, "session_id": session_id,
               "files_changed": ["path/to/file1", "path/to/file2"]})
@@ -145,7 +151,7 @@ RECURSE:
 
 ## Fix Classification
 
-See @.claude/reference/recursive-training.md Guard 2 for the full table.
+See @.claude/reference/iteration/recursive-training.md Guard 2 for the full table.
 
 Two heuristics:
 1. "Would this fix help a different target?" Yes → Level 0. No → Level 2.

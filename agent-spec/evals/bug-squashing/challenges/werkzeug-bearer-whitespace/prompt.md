@@ -1,6 +1,10 @@
 This workspace contains Werkzeug — a comprehensive WSGI web application library for Python.
 
-There is a bug in how the `WWW-Authenticate` header is generated. When a `WWW-Authenticate` header has no parameters (just the auth scheme, e.g. `Bearer` with no realm or other params), Werkzeug produces `"Bearer "` with a trailing space instead of `"Bearer"`. Some HTTP libraries (like h11) reject headers with trailing whitespace as malformed.
+A user reported the following bug:
+
+> As per RFC 9110 (challenge and response), the `WWW-Authenticate` header may omit the realm and other parameters — i.e., the header can contain a single word: the auth-scheme.
+>
+> For those parameter-less `WWW-Authenticate` headers, Werkzeug leaves a trailing whitespace: `"Bearer "` instead of `"Bearer"`. Some libraries, namely h11, rightfully reject those headers as malformed.
 
 A virtual environment is available at `.venv/`. Use `.venv/bin/python3` to run code.
 

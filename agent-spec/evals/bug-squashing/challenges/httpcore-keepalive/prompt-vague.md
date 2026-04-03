@@ -1,8 +1,6 @@
 This workspace contains httpcore — a minimal HTTP client library for Python, used internally by httpx.
 
-A user reported the following bug:
-
-> Idle connections are being dropped from the pool even when the `max_keepalive_connections` limit has not been reached. This affects both sync and async connection pools.
+Users report that connections in the connection pool are being dropped unexpectedly. The issue seems to affect keep-alive behavior.
 
 A virtual environment is available at `.venv/`. Use `.venv/bin/python3` to run code.
 

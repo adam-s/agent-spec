@@ -130,6 +130,14 @@ Each challenge directory contains:
 
 The workspace for each run starts empty, receives the seeds, runs setup, then gets the config's `.claude/` placed in it.
 
+### Prompt Content
+
+When real source material exists for the task (issue reports, user feedback, error messages), use it directly in prompt.md. Sanitize only to remove solution hints (diffs, file paths of the fix) — do not rewrite the content. Rewriting introduces bias: synthetic prompts either reveal too much or strip signal that affects agent behavior. Real inputs carry the natural level of specificity that the agent would encounter in practice.
+
+Wrapper context around the source material is fine: workspace description, environment setup (venv location, test commands), and constraints ("do not modify test files"). These are environment facts, not the stimulus.
+
+When no source material exists (greenfield coding tasks), write the prompt as a realistic task description — what a developer would actually say, not a test specification.
+
 ## Configs
 
 A config is a `.claude/` directory variant placed into the workspace. Configs are independent of challenges — the same config is tested against every challenge in the eval.

@@ -76,4 +76,4 @@ Each config is a complete `.claude/` directory placed into the workspace. Every 
 1. `/new-eval`
 2. Edit EVAL.md: set `source:` path, `reference:`, and the prompt body
 3. Use `__PORT__` in the prompt body (not a hardcoded port)
-4. Write verify.sh following the scoring contract in @.claude/reference/testing-protocol.md
+4. Write verify.sh following the scoring contract in @.claude/reference/iteration/testing-protocol.md

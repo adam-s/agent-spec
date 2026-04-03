@@ -31,7 +31,12 @@ def run_single(eval_dir, config_dir, cfg, args, challenge_name=None, challenge_d
         # Matrix eval: workspace from seeds
         seeds_dir = challenge_dir / "seeds"
         source_path = None
-        prompt_file_path = challenge_dir / "prompt.md"
+        if args.prompt_variant:
+            prompt_file_path = challenge_dir / f"prompt-{args.prompt_variant}.md"
+            if not prompt_file_path.exists():
+                die(f"Prompt variant '{args.prompt_variant}' not found: {prompt_file_path}")
+        else:
+            prompt_file_path = challenge_dir / "prompt.md"
         verify_path = challenge_dir / "verify.sh"
         setup_script = challenge_dir / "setup.sh"
         setup_cmds = setup_script.read_text().strip() if setup_script.exists() else ""
@@ -103,6 +108,8 @@ def main(args=None):
     parser.add_argument("--port", type=int, default=None)
     parser.add_argument("--stream", action="store_true", help="Use stream-json for real-time Claude events")
     parser.add_argument("--challenge", default=None, help="Run only this challenge (matrix evals)")
+    parser.add_argument("--prompt-variant", default=None, metavar="VARIANT",
+                        help="Use prompt-VARIANT.md instead of prompt.md (e.g. --prompt-variant vague)")
     parser.add_argument("--parallel", type=int, default=1, metavar="N",
                         help="Max challenges to run concurrently (default: 1 = sequential)")
     args = args or parser.parse_args()

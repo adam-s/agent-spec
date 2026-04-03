@@ -1,17 +1,13 @@
-This workspace contains the Arrow library — a Python library for working with dates, times, and timestamps.
+This workspace contains Arrow — a Python library for working with dates, times, and timestamps.
 
-There is a bug in the `humanize` method. When computing relative time descriptions, 16 days in the future is reported as "in a month" instead of "in 2 weeks." For example:
+A user reported the following bug:
 
-- January 9 to January 24 (15 days) → "in 2 weeks" (correct)
-- January 9 to January 25 (16 days) → "in a month" (wrong — should be "in 2 weeks")
-
-The bug is in how partial month rounding interacts with the weeks granularity. A 16-day difference within the same month should not be reported as a month.
-
-However, actual calendar-month differences should still work correctly:
-- February 8 to March 8 (28 days, `shift(months=1)`) → "in a month" (correct)
+> It seems that the intervals being used for the various thresholds for `humanize` are a bit strange. As of today, January 9 2026, there are two events, one on January 24 which appears as "in two weeks" and one on January 25 which appears as "in a month."
+>
+> 15 days (the 24th) is indeed about two weeks away, but 16 days (the 25th) is certainly not a month away — if anything it's also closest to around two weeks. It isn't even closer to three weeks than two, let alone a month.
 
 A virtual environment is available at `.venv/`. Use `.venv/bin/python3` to run code.
 
-Find and fix the bug. Run the existing tests with `.venv/bin/python3 -m pytest tests/` to verify your fix doesn't break anything.
+Find and fix the bug. Run the tests with `.venv/bin/python3 -m pytest tests/ -x -q` to verify your fix.
 
 Do not modify any test files.
