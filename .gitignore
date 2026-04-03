@@ -5,6 +5,7 @@ __pycache__/
 /*
 !/agent-spec/
 !/csv-reporter/
+!/bug-squasher/
 !/hono-websocket-counter/
 !/sqlite-window-queries/
 !/README.md
