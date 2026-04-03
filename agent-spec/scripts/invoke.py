@@ -25,7 +25,7 @@ from lib import (
     PROJECT_DIR, RUN_ROOT, SANDBOX_ROOT, DEFAULT_MODEL, DEFAULT_BUDGET, TIMEOUT_DEFAULT,
     SCRIPTS_DIR, apc_log, allocate_port, die, require_file, require_dir,
     parse_output_json, now_ms, get_baseline_cost, StatusLine, render_event,
-    track_pid, _stop_process_tree,
+    track_pid, _stop_process_tree, _pid_alive, PID_FILE,
 )
 from system_monitor import check_preflight, get_disk_usage, get_memory_usage, get_cpu_usage
 
@@ -120,6 +120,23 @@ def _emit_resource_snapshot(status: StatusLine):
              snapshot_data)
 
 
+def _prune_pid_registry():
+    """Remove dead PIDs from the registry. Prevents unbounded growth."""
+    if not PID_FILE.exists():
+        return
+    live_lines = []
+    for line in PID_FILE.read_text().splitlines():
+        parts = line.strip().split("|")
+        if len(parts) >= 1 and parts[0]:
+            try:
+                pid = int(parts[0])
+                if _pid_alive(pid):
+                    live_lines.append(line)
+            except ValueError:
+                pass
+    PID_FILE.write_text("\n".join(live_lines) + "\n" if live_lines else "")
+
+
 def _archive_and_cleanup():
     """Archive logs then clean up. Runs on ANY exit."""
     # Stop agent and its entire process tree
@@ -155,6 +172,9 @@ def _archive_and_cleanup():
     if not _keep and _sandbox and _sandbox.exists():
         shutil.rmtree(_sandbox, ignore_errors=True)
 
+    # Prune dead PIDs from registry
+    _prune_pid_registry()
+
 
 def _handle_signal(signum, frame):
     sig_name = signal.Signals(signum).name
@@ -165,6 +185,9 @@ def _handle_signal(signum, frame):
 
 def main():
     global _sandbox, _agent_proc, _keep, _run_dir, _results_dir
+
+    # Pre-run: prune dead PIDs from previous runs
+    _prune_pid_registry()
 
     parser = argparse.ArgumentParser(description="Run one agent in a workspace")
     parser.add_argument("source", nargs="?", default=None, help="Source repo path (optional if --seeds used)")
