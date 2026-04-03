@@ -43,6 +43,8 @@ The cycle:
 5. Delete the failed eval artifacts and start fresh — don't patch around failures
 6. Attempt again
 
+**Generalization guard:** Every instruction improvement must be generalized — never specific to a particular bug, library, or error type. If a finding names the domain, it's overfit. Validate improvements against held-out cases that the improvement process has never seen. See @.claude/reference/generalization.md.
+
 This is Level 0 self-improvement. The `/iterate` skill improves Level 2 (target `.claude/` directories). This cycle improves Level 0 (the orchestrator's own instructions).
 
 ## Exploratory Project

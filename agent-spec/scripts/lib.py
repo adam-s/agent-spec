@@ -23,8 +23,8 @@ SANDBOX_ROOT = Path("/tmp/claude/agent-spec")
 RUN_ROOT = Path("/tmp/agent-spec")
 PID_FILE = Path("/tmp/agent-spec-pids.txt")
 
-DEFAULT_MODEL = "claude-sonnet-4-6"
-DEFAULT_BUDGET = "2.00"
+DEFAULT_MODEL = "claude-haiku-4-5-20251001"
+DEFAULT_BUDGET = "5.00"
 
 SCRIPTS_DIR = Path(__file__).parent
 PROJECT_DIR = SCRIPTS_DIR.parent
