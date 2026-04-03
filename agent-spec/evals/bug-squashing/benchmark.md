@@ -105,17 +105,17 @@ The reviewer agent NEVER sees these. Used only to validate that instruction impr
 | Bug type | Streaming (zstd decompression fails on multi-frame responses) |
 | Complexity | Medium — compression pipeline fix |
 
-### 8. marshmallow-unreachable-warning
+### 8. httpcore-keepalive
 
 | Field | Value |
 |-------|-------|
-| Repo | marshmallow-code/marshmallow |
+| Repo | encode/httpcore |
 | Issue | (linked in PR) |
-| PR | #2935 |
-| Fix commit | `4acb783c73130f762aa5b0df6b65ff7685d5ff2c` |
-| Files | `src/marshmallow/fields.py` |
-| Bug type | Type system (unreachable code warning) |
-| Complexity | Low — type annotation fix |
+| PR | #1000 |
+| Fix commit | `10a658221deb38a4c5b16db55ab554b0bf731707` |
+| Files | `httpcore/_async/connection_pool.py`, `httpcore/_sync/connection_pool.py`, tests |
+| Bug type | Connection pool logic (idle connections dropped prematurely) |
+| Complexity | Medium — must fix both sync and async pools |
 
 ## Bug Type Distribution
 
