@@ -409,6 +409,24 @@ def print_result_line(target: str, config: str, result: str,
     print(line)
 
 
+# ── Results Discovery ──────────────────────────────────────────
+
+def find_results_dir(run_id: str) -> Path | None:
+    """Find a run's results dir by searching evals/*/results/ then flat results/."""
+    evals_dir = PROJECT_DIR / "evals"
+    if evals_dir.is_dir():
+        for eval_dir in evals_dir.iterdir():
+            if not eval_dir.is_dir():
+                continue
+            candidate = eval_dir / "results" / run_id
+            if candidate.is_dir():
+                return candidate
+    flat = PROJECT_DIR / "results" / run_id
+    if flat.is_dir():
+        return flat
+    return None
+
+
 # ── Baseline Cost ───────────────────────────────────────────────
 
 def get_baseline_cost(target: str, config: str, max_runs: int = 10) -> float | None:

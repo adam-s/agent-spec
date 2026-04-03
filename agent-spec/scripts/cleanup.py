@@ -2,8 +2,10 @@
 """cleanup.py — Stop all agent-spec processes, clear ports, remove sandboxes.
 
 Usage:
-  python3 scripts/cleanup.py           # Stop processes, remove sandboxes, keep logs
-  python3 scripts/cleanup.py --force   # Also delete /tmp run logs
+  python3 scripts/cleanup.py                        # Stop processes, remove sandboxes, keep logs
+  python3 scripts/cleanup.py --force                # Also delete /tmp run logs
+  python3 scripts/cleanup.py --prune-results        # Keep 10 most recent results
+  python3 scripts/cleanup.py --prune-results 20     # Keep 20 most recent results
 """
 import argparse
 import glob
@@ -22,6 +24,8 @@ from lib import (
 def main(args=None):
     parser = argparse.ArgumentParser(description="Stop all agent-spec processes, clear ports, remove sandboxes")
     parser.add_argument("--force", action="store_true", help="Also delete /tmp run logs")
+    parser.add_argument("--prune-results", nargs="?", const=10, type=int, metavar="N",
+                        help="Keep only the N most recent results (default: 10), preserve baselines/")
     args = args or parser.parse_args()
 
     force = args.force
@@ -94,10 +98,40 @@ def main(args=None):
             subprocess.run(["rm", "-rf", d], timeout=30)
         print("  Force: deleted /tmp run logs")
 
-    # 7. Prune worktrees
+    # 7. Prune results (scans evals/*/results/ and flat results/)
+    if args.prune_results is not None:
+        keep = args.prune_results
+        project_dir = Path(__file__).parent.parent
+        all_run_dirs = []
+        # Scan per-eval results
+        evals_dir = project_dir / "evals"
+        if evals_dir.is_dir():
+            for eval_dir in evals_dir.iterdir():
+                eval_results = eval_dir / "results"
+                if eval_results.is_dir():
+                    for d in eval_results.iterdir():
+                        if d.is_dir() and d.name != "baselines":
+                            all_run_dirs.append(d)
+        # Scan flat results/ for orphans
+        flat_results = project_dir / "results"
+        if flat_results.is_dir():
+            for d in flat_results.iterdir():
+                if d.is_dir() and d.name != "baselines":
+                    all_run_dirs.append(d)
+        # Sort by mtime, prune oldest
+        all_run_dirs.sort(key=lambda d: d.stat().st_mtime, reverse=True)
+        to_remove = all_run_dirs[keep:]
+        for d in to_remove:
+            subprocess.run(["rm", "-rf", str(d)], timeout=30)
+        if to_remove:
+            print(f"  Pruned {len(to_remove)} results (kept {min(keep, len(all_run_dirs))} most recent)")
+        else:
+            print(f"  Results: {len(all_run_dirs)} runs, nothing to prune (keep={keep})")
+
+    # 8. Prune worktrees
     subprocess.run(["git", "worktree", "prune"], capture_output=True, timeout=10)
 
-    # 8. Verify
+    # 9. Verify
     print()
     remaining_sandboxes = len(glob.glob(f"{SANDBOX_ROOT}-*"))
     remaining_tracked = len(PID_FILE.read_text().splitlines()) if PID_FILE.exists() else 0

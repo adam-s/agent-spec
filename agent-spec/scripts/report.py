@@ -329,7 +329,11 @@ def baseline_save(run_id: str):
 
     target = data.get("target", "unknown")
     config = data.get("config", "unknown")
-    baselines_dir = PROJECT_DIR / "results" / "baselines"
+    eval_name = started["data"].get("eval", "") if started else ""
+    if eval_name:
+        baselines_dir = PROJECT_DIR / "evals" / eval_name / "results" / "baselines"
+    else:
+        baselines_dir = PROJECT_DIR / "results" / "baselines"
     baselines_dir.mkdir(parents=True, exist_ok=True)
 
     outfile = baselines_dir / f"{target}_{config}.json"
@@ -349,7 +353,11 @@ def baseline_check(run_id: str):
     config = started["data"].get("config", "unknown") if started else "unknown"
     c_model = started["data"].get("model", "?") if started else "?"
 
-    baseline_path = PROJECT_DIR / "results" / "baselines" / f"{target}_{config}.json"
+    eval_name = started["data"].get("eval", "") if started else ""
+    if eval_name:
+        baseline_path = PROJECT_DIR / "evals" / eval_name / "results" / "baselines" / f"{target}_{config}.json"
+    else:
+        baseline_path = PROJECT_DIR / "results" / "baselines" / f"{target}_{config}.json"
     if not baseline_path.exists():
         print(f"NO BASELINE for {target}/{config} \u2014 run: report.py --baseline save <run_id>")
         sys.exit(0)

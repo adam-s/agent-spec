@@ -220,19 +220,17 @@ def format_stream(e: dict) -> str:
 
 def print_diff(id1: str, id2: str):
     """Show config diff between two runs using archived config-snapshot dirs."""
-    snap1 = Path(f"results/{id1}/config-snapshot")
-    snap2 = Path(f"results/{id2}/config-snapshot")
+    from lib import find_results_dir
 
-    if not snap1.exists() or not snap2.exists():
-        # Try project dir
-        from lib import PROJECT_DIR
-        snap1 = PROJECT_DIR / "results" / id1 / "config-snapshot"
-        snap2 = PROJECT_DIR / "results" / id2 / "config-snapshot"
+    dir1 = find_results_dir(id1)
+    dir2 = find_results_dir(id2)
+    snap1 = dir1 / "config-snapshot" if dir1 else None
+    snap2 = dir2 / "config-snapshot" if dir2 else None
 
-    if not snap1.exists():
+    if not snap1 or not snap1.exists():
         print(f"No config snapshot for {id1}. Run with updated invoke.py to archive configs.", file=sys.stderr)
         sys.exit(1)
-    if not snap2.exists():
+    if not snap2 or not snap2.exists():
         print(f"No config snapshot for {id2}. Run with updated invoke.py to archive configs.", file=sys.stderr)
         sys.exit(1)
 

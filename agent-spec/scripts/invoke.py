@@ -182,6 +182,7 @@ def main():
     parser.add_argument("--verbose", action="store_true", help="Show workspace lifecycle details")
     parser.add_argument("--stream", action="store_true", help="Use stream-json for real-time Claude events")
     parser.add_argument("--challenge", default="", help="Challenge name (for logging)")
+    parser.add_argument("--eval-name", default="", help="Eval name (results go to evals/<name>/results/)")
     args = parser.parse_args()
 
     _keep = args.keep
@@ -205,7 +206,10 @@ def main():
     run_id = uuid.uuid4().hex[:8]
     os.environ["AGENT_SPEC_RUN_ID"] = run_id
     _run_dir = RUN_ROOT / run_id
-    _results_dir = PROJECT_DIR / "results" / run_id
+    if args.eval_name:
+        _results_dir = PROJECT_DIR / "evals" / args.eval_name / "results" / run_id
+    else:
+        _results_dir = PROJECT_DIR / "results" / run_id
     _run_dir.mkdir(parents=True, exist_ok=True)
     _results_dir.mkdir(parents=True, exist_ok=True)
 
@@ -218,7 +222,7 @@ def main():
     # ── Emit run_started (stdout + stderr + events.jsonl) ────────
     run_started_data = {
         "run_id": run_id, "target": target_name, "config": config_name,
-        "model": args.model, "budget": float(args.budget), "port": port,
+        "eval": args.eval_name, "model": args.model, "budget": float(args.budget), "port": port,
     }
     emit("INFO", "run_started", "Run started", run_started_data)
     render_event({"event": "run_started", "data": run_started_data}, verbose=verbose)

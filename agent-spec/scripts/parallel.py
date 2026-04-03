@@ -31,7 +31,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from lib import (
     PROJECT_DIR, SCRIPTS_DIR, PORT_MIN, PORT_MAX, RUN_ROOT,
     die, require_dir, apc_log, now_ms,
-    list_evals, list_configs, get_baseline_cost,
+    list_evals, list_configs, get_baseline_cost, find_results_dir,
     track_pid, stop_tracked_pids,
     StatusLine, _color, GREEN, RED, RESET, DIM, BOLD, _IS_TTY,
 )
@@ -277,8 +277,8 @@ def main(args=None):
                 mf.write(run_id + "\n")
 
             # Archive instance log
-            results_dir = PROJECT_DIR / "results" / run_id
-            if results_dir.is_dir():
+            results_dir = find_results_dir(run_id)
+            if results_dir:
                 shutil.copy2(log_files[i], results_dir / "parallel-instance.log")
 
             if result != "PASS":

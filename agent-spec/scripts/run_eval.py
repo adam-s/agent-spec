@@ -7,6 +7,7 @@ Usage:
 """
 
 import argparse
+import concurrent.futures
 import os
 import re
 import subprocess
@@ -81,6 +82,7 @@ def run_single(eval_dir, config_dir, cfg, args, challenge_name=None, challenge_d
         invoke_args += ["--setup", setup_cmds]
     if challenge_name:
         invoke_args += ["--challenge", challenge_name]
+    invoke_args += ["--eval-name", eval_dir.name]
     if args.keep:
         invoke_args.append("--keep")
     if args.port is not None:
@@ -101,6 +103,8 @@ def main(args=None):
     parser.add_argument("--port", type=int, default=None)
     parser.add_argument("--stream", action="store_true", help="Use stream-json for real-time Claude events")
     parser.add_argument("--challenge", default=None, help="Run only this challenge (matrix evals)")
+    parser.add_argument("--parallel", type=int, default=1, metavar="N",
+                        help="Max challenges to run concurrently (default: 1 = sequential)")
     args = args or parser.parse_args()
 
     eval_dir = PROJECT_DIR / "evals" / args.eval
@@ -112,7 +116,12 @@ def main(args=None):
     config_dir = eval_dir / "configs" / args.config
     if not config_dir.is_dir():
         available = list_configs(args.eval)
-        die(f"Config '{args.config}' not found. Available: {', '.join(available) if available else 'none'}")
+        if args.config == "baseline" and available:
+            args.config = available[0]
+            config_dir = eval_dir / "configs" / args.config
+            print(f"  No 'baseline' config — using '{args.config}'", file=sys.stderr)
+        else:
+            die(f"Config '{args.config}' not found. Available: {', '.join(available) if available else 'none'}")
 
     # Parse EVAL.md
     eval_file = eval_dir / "EVAL.md"
@@ -129,9 +138,24 @@ def main(args=None):
                 die(f"Challenge '{args.challenge}' not found. Available: {', '.join(challenges)}")
             challenges = [args.challenge]
 
-        for ch in challenges:
-            run_single(eval_dir, config_dir, cfg, args,
-                       challenge_name=ch, challenge_dir=challenges_dir / ch)
+        if args.parallel > 1 and len(challenges) > 1:
+            max_workers = min(args.parallel, len(challenges))
+            print(f"  Running {len(challenges)} challenges ({max_workers} concurrent)", file=sys.stderr)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as pool:
+                futures = {
+                    pool.submit(run_single, eval_dir, config_dir, cfg, args,
+                                challenge_name=ch, challenge_dir=challenges_dir / ch): ch
+                    for ch in challenges
+                }
+                for future in concurrent.futures.as_completed(futures):
+                    ch = futures[future]
+                    rc = future.result()
+                    if rc != 0:
+                        print(f"  Challenge '{ch}' failed (exit {rc})", file=sys.stderr)
+        else:
+            for ch in challenges:
+                run_single(eval_dir, config_dir, cfg, args,
+                           challenge_name=ch, challenge_dir=challenges_dir / ch)
     else:
         # Single-challenge eval
         if not cfg.get("source"):
