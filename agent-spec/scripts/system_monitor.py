@@ -139,6 +139,30 @@ def get_cpu_usage() -> dict:
         return {"pct": 0, "cores": 0, "status": f"ERROR: {e}"}
 
 
+def get_gpu_info() -> dict:
+    """GPU info. Reports device name(s). Utilization requires sudo on macOS."""
+    try:
+        if platform.system() == "Darwin":
+            result = subprocess.run(
+                ["system_profiler", "SPDisplaysDataType", "-json"],
+                capture_output=True, text=True, timeout=5
+            )
+            import json as _json
+            data = _json.loads(result.stdout)
+            gpus = data.get("SPDisplaysDataType", [])
+            names = [g.get("sppci_model", "?") for g in gpus]
+        else:
+            # Linux: try nvidia-smi
+            result = subprocess.run(
+                ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+                capture_output=True, text=True, timeout=5
+            )
+            names = [n.strip() for n in result.stdout.strip().split("\n") if n.strip()]
+        return {"names": names, "count": len(names), "status": "OK"}
+    except Exception:
+        return {"names": [], "count": 0, "status": "N/A"}
+
+
 def get_agent_spec_processes() -> dict:
     """Count active agent-spec runs, sandboxes, ports, and tracked PIDs."""
     from lib import SANDBOX_ROOT, RUN_ROOT, PORT_MIN, PORT_MAX, get_tracked_pids
@@ -212,6 +236,7 @@ def get_snapshot(target_dir: Path | None = None) -> dict:
     disk = get_disk_usage()
     mem = get_memory_usage()
     cpu = get_cpu_usage()
+    gpu = get_gpu_info()
     procs = get_agent_spec_processes()
     custom = load_collectors(target_dir)
 
@@ -244,6 +269,7 @@ def get_snapshot(target_dir: Path | None = None) -> dict:
         "disk": disk,
         "memory": mem,
         "cpu": cpu,
+        "gpu": gpu,
         "processes": procs,
         "custom": custom,
         "overall": overall,
@@ -308,6 +334,12 @@ def print_status_table(snapshot: dict | None = None):
     cpu_label = f"CPU ({cpu['cores']} cores)"
     print(f"  {cpu_label:<22} {cpu['pct']:>13.0f}%  {'':>8}  [{_status_icon(cpu['status'])}]")
 
+    # GPU
+    gpu = snapshot.get("gpu", {})
+    if gpu.get("count", 0) > 0:
+        gpu_names = ", ".join(gpu.get("names", []))
+        print(f"  {'GPU':<22} {gpu_names:>22}")
+
     # agent-spec processes
     print("\u2500" * W)
     print(f"  {'Active Runs':<22} {procs['active_runs']:>14}")
@@ -354,40 +386,6 @@ def print_status_table(snapshot: dict | None = None):
     return overall != "CRITICAL"
 
 
-# ── Sidecar Mode ────────────────────────────────────────────────
-
-def run_sidecar(run_id: str, interval: int = 30):
-    """Continuous monitoring that writes events to JSONL."""
-    from lib import apc_log
-
-    while True:
-        try:
-            snapshot = get_snapshot()
-            event_data = {
-                "cpu": snapshot["cpu_pct"],
-                "mem": snapshot["mem_pct"],
-                "disk_free_gb": snapshot["disk_free_gb"],
-            }
-            apc_log("METRIC", "resource_snapshot", "System resources",
-                    event_data, run_id=run_id)
-
-            # Emit warnings for threshold breaches
-            if snapshot["overall"] == "CRITICAL":
-                apc_log("WARN", "resource_warning",
-                        f"CRITICAL: {snapshot['status_summary']}",
-                        event_data, run_id=run_id)
-                print(f"WARNING: System resources critical — {snapshot['status_summary']}",
-                      file=sys.stderr)
-            elif snapshot["overall"] == "WARNING":
-                apc_log("WARN", "resource_warning",
-                        f"WARNING: {snapshot['status_summary']}",
-                        event_data, run_id=run_id)
-        except Exception as e:
-            print(f"Monitor error (will retry): {e}", file=sys.stderr)
-
-        time.sleep(interval)
-
-
 # ── CLI ─────────────────────────────────────────────────────────
 
 def main(args=None):
@@ -400,10 +398,6 @@ def main(args=None):
     p_watch = sub.add_parser("watch", help="Continuous monitoring")
     p_watch.add_argument("--interval", type=int, default=10)
 
-    p_sidecar = sub.add_parser("sidecar", help="Emit events to JSONL (used by invoke.py)")
-    p_sidecar.add_argument("--run-id", required=True)
-    p_sidecar.add_argument("--interval", type=int, default=30)
-
     args = args or parser.parse_args()
 
     if args.command == "watch":
@@ -414,8 +408,6 @@ def main(args=None):
                 time.sleep(args.interval)
         except KeyboardInterrupt:
             pass
-    elif args.command == "sidecar":
-        run_sidecar(args.run_id, args.interval)
     else:
         print_status_table()
 

@@ -85,6 +85,8 @@ def run_single(eval_dir, config_dir, cfg, args, challenge_name=None, challenge_d
         invoke_args.append("--keep")
     if args.port is not None:
         invoke_args += ["--port", str(args.port)]
+    if getattr(args, "stream", False):
+        invoke_args.append("--stream")
 
     return subprocess.run(invoke_args).returncode
 
@@ -97,6 +99,7 @@ def main(args=None):
     parser.add_argument("--budget", default=None)
     parser.add_argument("--keep", action="store_true")
     parser.add_argument("--port", type=int, default=None)
+    parser.add_argument("--stream", action="store_true", help="Use stream-json for real-time Claude events")
     parser.add_argument("--challenge", default=None, help="Run only this challenge (matrix evals)")
     args = args or parser.parse_args()
 

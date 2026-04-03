@@ -23,6 +23,7 @@ Every common operation has a script or skill. Before writing any bash to build a
 | `scripts/parallel.py <eval> --configs a,b` | A/B test configs in parallel |
 | `scripts/parallel.py <eval> --models x,y` | Benchmark models in parallel |
 | `scripts/parallel.py <eval> --instances N` | N reps of same config |
+| `scripts/watch.py` | Live vitest-style renderer (pipe from --stream or --latest) |
 | `scripts/dashboard.py <run_id>` | Monitor a run (live or summary) |
 | `scripts/dashboard.py --latest` | Monitor most recent run |
 | `scripts/dashboard.py <id> --stream` | Compact no-color output (grep-friendly) |
@@ -31,8 +32,14 @@ Every common operation has a script or skill. Before writing any bash to build a
 | `scripts/report.py --all` | Full report across all runs |
 | `scripts/report.py --all --group-by config` | Compare configs with deltas |
 | `scripts/report.py --all --group-by model` | Compare models with deltas |
+| `scripts/report.py --compare <id1> <id2>` | Side-by-side two-run diff |
 | `scripts/report.py --session <session_id>` | Iterate session report by depth |
-| `scripts/tokens.py --session <session_id>` | Cost rollup across iterate session |
+| `scripts/report.py --score <run_id>` | Print PASS/FAIL result |
+| `scripts/report.py --tokens <run_id>` | Print token breakdown for a run |
+| `scripts/report.py --tokens --session <session_id>` | Cost rollup across iterate session |
+| `scripts/report.py --baseline save <run_id>` | Save run as baseline for regression detection |
+| `scripts/report.py --baseline check <run_id>` | Compare run against saved baseline |
+| `scripts/system_monitor.py` | One-shot system resource status |
 | `scripts/cleanup.py` | Full state reset (ports, sandboxes, PIDs) |
 
 ## Config resolution

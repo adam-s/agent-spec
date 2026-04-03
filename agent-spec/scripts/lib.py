@@ -259,7 +259,11 @@ parse_target_yaml = parse_eval_md
 # ── Output Parsing ───────────────────────────────────────────────
 
 def parse_output_json(path: str | Path) -> dict:
-    """Parse Claude's output.json and extract token metrics."""
+    """Parse Claude's output.json and extract metrics.
+
+    Extracts token counts, cost, timing, stop reason, session info,
+    and permission denials from Claude CLI's JSON output.
+    """
     try:
         data = json.loads(Path(path).read_text())
     except (json.JSONDecodeError, FileNotFoundError):
@@ -272,12 +276,22 @@ def parse_output_json(path: str | Path) -> dict:
 
     u = data.get("usage", {})
     return {
+        # Token counts
         "input": mu.get("inputTokens", u.get("input_tokens", 0)),
         "output": mu.get("outputTokens", u.get("output_tokens", 0)),
         "cache_create": mu.get("cacheCreationInputTokens", u.get("cache_creation_input_tokens", 0)),
         "cache_read": mu.get("cacheReadInputTokens", u.get("cache_read_input_tokens", 0)),
         "cost_usd": round(data.get("total_cost_usd", mu.get("costUSD", 0)), 4),
         "turns": data.get("num_turns", 0),
+        # Timing
+        "duration_ms": data.get("duration_ms", 0),
+        "duration_api_ms": data.get("duration_api_ms", 0),
+        # Execution metadata
+        "stop_reason": data.get("stop_reason", ""),
+        "session_id": data.get("session_id", ""),
+        "is_error": data.get("is_error", False),
+        "result_message": (data.get("result", "") or "")[:500],
+        "permission_denials": data.get("permission_denials", []),
     }
 
 
@@ -300,6 +314,29 @@ def get_event(events: list[dict], event_name: str) -> dict | None:
         if e.get("event") == event_name:
             return e
     return None
+
+
+def find_session_runs(session_id: str) -> dict[int, list[str]]:
+    """Find all run_ids belonging to an iterate session, grouped by depth."""
+    depth_runs: dict[int, list[str]] = {}
+    if not RUN_ROOT.exists():
+        return depth_runs
+    for run_dir in RUN_ROOT.iterdir():
+        events_file = run_dir / "events.jsonl"
+        if not events_file.exists():
+            continue
+        events = load_events(events_file)
+        for e in events:
+            if (e.get("event") == "iteration_started"
+                    and e.get("data", {}).get("session_id", "").startswith(session_id)):
+                depth = e["data"].get("depth", 0)
+                for e2 in events:
+                    if e2.get("event") == "instance_complete":
+                        child_id = e2["data"].get("run_id")
+                        if child_id:
+                            depth_runs.setdefault(depth, []).append(child_id)
+                break
+    return depth_runs
 
 
 # ── Timing ───────────────────────────────────────────────────────
@@ -494,3 +531,82 @@ class StatusLine:
         elif self.budget:
             line += f"  $0.00 / ${self.budget:.2f}"
         return line
+
+
+# ── Event Rendering ────────────────────────────────────────────
+
+def render_event(event: dict, status: StatusLine | None = None, verbose: bool = False):
+    """Render a single event to stderr for human display.
+
+    This is the single place where events become terminal output.
+    invoke.py and parallel.py call this instead of scattered print() calls.
+    """
+    ev = event.get("event", "")
+    data = event.get("data", {})
+
+    if ev == "run_started":
+        target = data.get("target", "?")
+        config = data.get("config", "?")
+        model = data.get("model", "?")
+        run_id = data.get("run_id", "?")
+        budget = data.get("budget", "?")
+        print(f"── {target}/{config} ({model}) ──", file=sys.stderr)
+        print(f"  Run:    {run_id}", file=sys.stderr)
+        print(f"  Budget: ${budget}", file=sys.stderr)
+        if verbose:
+            print(f"  Port:   {data.get('port', '?')}", file=sys.stderr)
+            print(f"  Log:    {RUN_ROOT / run_id}/events.jsonl", file=sys.stderr)
+        print(file=sys.stderr)
+
+    elif ev == "preflight_check" and verbose:
+        print(f"  Resources: {data.get('overall', '?')} — "
+              f"CPU {data.get('cpu', 0)}% Mem {data.get('mem', 0)}% "
+              f"Disk {data.get('disk_free_gb', 0)}GB", file=sys.stderr)
+
+    elif ev == "files_deleted" and verbose:
+        print(f"  Deleted: {data.get('files', '')}", file=sys.stderr)
+
+    elif ev == "setup_command" and verbose:
+        print(f"  Setup: {data.get('cmd', '')}", file=sys.stderr)
+
+    elif ev == "resource_snapshot" and status:
+        status.update()
+
+    elif ev == "token_update" and status:
+        status.update(cost=data.get("cost_usd", 0),
+                      tokens_in=data.get("input", 0),
+                      tokens_out=data.get("output", 0))
+
+    elif ev == "verification_output" and verbose:
+        output = data.get("output", "").strip()
+        if output:
+            print(f"\n  {DIM}── verify ──{RESET}" if _IS_TTY else "\n  -- verify --",
+                  file=sys.stderr)
+            for line in output.splitlines():
+                print(f"  {DIM}{line}{RESET}" if _IS_TTY else f"  {line}",
+                      file=sys.stderr)
+
+    elif ev == "test_passed" and verbose:
+        print(f"  {_color(GREEN, '✓')} {data.get('test_name', '')}", file=sys.stderr)
+
+    elif ev == "test_failed" and verbose:
+        print(f"  {_color(RED, '✗')} {data.get('test_name', '')}", file=sys.stderr)
+
+    elif ev == "run_finished" and status:
+        status.finish(data.get("result", "?"),
+                      cost=data.get("cost_usd"),
+                      duration_s=data.get("duration_s"))
+
+    elif ev == "run_finished" and not status:
+        # Fallback when no StatusLine (e.g. non-interactive)
+        print_result_line(data.get("target", "?"), data.get("config", "?"),
+                          data.get("result", "?"),
+                          duration_s=data.get("duration_s"),
+                          cost_usd=data.get("cost_usd"))
+
+    elif ev == "claude_tool_use" and verbose:
+        print(f"  {DIM}tool: {data.get('tool', '?')}{RESET}" if _IS_TTY
+              else f"  tool: {data.get('tool', '?')}", file=sys.stderr)
+
+    elif ev == "results_dir" and verbose:
+        print(f"  Results: {data.get('path', '?')}", file=sys.stderr)

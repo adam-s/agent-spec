@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """parallel.py — Launch parallel invoke instances for a target.
 
+Consumes invoke.py's stdout JSONL protocol to track results.
+Human display goes to stderr via StatusLine.
+
 Usage:
   python3 scripts/parallel.py <target> [config] [options]
 
@@ -15,8 +18,8 @@ Options:
 """
 
 import argparse
+import json
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -29,56 +32,37 @@ from lib import (
     PROJECT_DIR, SCRIPTS_DIR, PORT_MIN, PORT_MAX, RUN_ROOT,
     die, require_dir, apc_log, now_ms,
     list_evals, list_configs, get_baseline_cost,
-    load_events, get_event, track_pid, stop_tracked_pids,
+    track_pid, stop_tracked_pids,
     StatusLine, _color, GREEN, RED, RESET, DIM, BOLD, _IS_TTY,
 )
 from system_monitor import check_preflight, get_disk_usage, get_memory_usage
 
 
-def _parse_log_for_result(log_file: str) -> tuple[str | None, str, float]:
-    """Parse an instance log for run_id, result, and cost."""
-    run_id = None
-    result = "UNKNOWN"
-    cost = 0.0
-    try:
-        log_text = Path(log_file).read_text()
-        m = re.search(r'Run:\s+([a-f0-9]{8})', log_text)
-        if not m:
-            m = re.search(r'agent-spec run: ([a-f0-9]{8})', log_text)
-        if m:
-            run_id = m.group(1)
-        rm = re.findall(r'RESULT: [A-Z/]+', log_text)
-        if rm:
-            result = rm[-1].replace("RESULT: ", "")
-        cm = re.findall(r'\$(\d+\.\d+)', log_text)
-        if cm:
-            cost = float(cm[-1])
-    except FileNotFoundError:
-        pass
+def _drain_stdout(proc: subprocess.Popen) -> dict:
+    """Read all JSONL from a child's stdout, return the run_finished event data.
 
-    # Read authoritative score and cost from events.jsonl when available
-    if run_id:
-        events_file = RUN_ROOT / run_id / "events.jsonl"
-        if events_file.exists():
-            events = load_events(events_file)
-            score = get_event(events, "score")
-            if score:
-                result = score["data"].get("result", result)
-            token = get_event(events, "token_update")
-            if token:
-                cost = token["data"].get("cost_usd", cost)
-
-    return run_id, result, cost
-
-
-def _render_multi_status(statuses: list[StatusLine], labels: list[str]):
-    """Render all status lines by moving cursor up and rewriting."""
-    n = len(statuses)
-    # Move up n lines, rewrite each, end at bottom
-    sys.stderr.write(f"\033[{n}A")
-    for s in statuses:
-        s.update()
-    sys.stderr.flush()
+    Returns {"run_id": str, "result": str, "cost_usd": float} or empty dict.
+    """
+    finished = {}
+    if proc.stdout is None:
+        return finished
+    for raw_line in proc.stdout:
+        line = raw_line.decode("utf-8", errors="replace").strip()
+        if not line:
+            continue
+        try:
+            event = json.loads(line)
+            ev = event.get("event", "")
+            data = event.get("data", {})
+            if ev == "run_finished":
+                finished = {
+                    "run_id": data.get("run_id"),
+                    "result": data.get("result", "UNKNOWN"),
+                    "cost_usd": data.get("cost_usd", 0.0),
+                }
+        except json.JSONDecodeError:
+            pass
+    return finished
 
 
 def main(args=None):
@@ -92,6 +76,7 @@ def main(args=None):
     parser.add_argument("--keep", action="store_true")
     parser.add_argument("--model", default="")
     parser.add_argument("--budget", default="")
+    parser.add_argument("--stream", action="store_true", help="Use stream-json for real-time Claude events")
     parser.add_argument("--verbose", action="store_true")
     args = args or parser.parse_args()
 
@@ -128,7 +113,7 @@ def main(args=None):
 
     # Memory warning for parallel runs
     mem = get_memory_usage()
-    estimated_mb = total * 500  # ~500MB per agent process
+    estimated_mb = total * 500
     available_mb = mem["free_gb"] * 1024
     if estimated_mb > available_mb * 0.8:
         print(f"  WARNING: {total} agents need ~{estimated_mb}MB, "
@@ -207,39 +192,44 @@ def main(args=None):
             cmd.append("--keep")
         if inject_dir:
             cmd += ["--inject", str(inject_dir)]
+        if args.stream:
+            cmd.append("--stream")
 
-        with open(log_file, "w") as lf:
-            proc = subprocess.Popen(cmd, stdout=lf, stderr=subprocess.STDOUT)
-            track_pid(proc.pid, instance_port, f"parallel-{i}")
-            procs.append(proc)
+        # stdout=PIPE for JSONL protocol, stderr to log file for human display
+        lf = open(log_file, "w")
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=lf)
+        track_pid(proc.pid, instance_port, f"parallel-{i}")
+        procs.append((proc, lf))
 
         # Create status line and print initial placeholder
         status = StatusLine(label=label, budget=budget, baseline_cost=baseline)
         statuses.append(status)
         status.update()
         if _IS_TTY:
-            print(file=sys.stderr)  # newline for each status line slot
+            print(file=sys.stderr)
 
     # ── Poll loop ────────────────────────────────────────────────
     is_tty = _IS_TTY
     finished = [False] * total
+    instance_results: list[dict] = [{}] * total
     resource_tick = 0
 
     while not all(finished):
-        for i, (proc, status) in enumerate(zip(procs, statuses)):
+        for i, ((proc, _lf), status) in enumerate(zip(procs, statuses)):
             if finished[i]:
                 continue
             if proc.poll() is not None:
-                # Instance done — parse result
-                run_id, result, cost = _parse_log_for_result(log_files[i])
+                # Instance done — drain stdout JSONL for run_finished event
+                result_data = _drain_stdout(proc)
+                instance_results[i] = result_data
+                result = result_data.get("result", "UNKNOWN")
+                cost = result_data.get("cost_usd", 0.0)
                 status.finish(result, cost=cost)
                 finished[i] = True
             elif is_tty:
-                # Tick the spinner for running instances
                 status.update()
 
         if is_tty and not all(finished):
-            # Move cursor up to rewrite all lines
             active_count = total
             sys.stderr.write(f"\033[{active_count}A")
             for s in statuses:
@@ -247,13 +237,12 @@ def main(args=None):
                     s.update()
                     sys.stderr.write("\n")
                 else:
-                    # Re-render finished line (already has newline from finish())
                     sys.stderr.write("\n")
             sys.stderr.flush()
 
         # Periodic resource check
         resource_tick += 1
-        if resource_tick >= 30:  # every 30 ticks × 2s = 60s
+        if resource_tick >= 30:
             resource_tick = 0
             disk = get_disk_usage()
             mem = get_memory_usage()
@@ -267,14 +256,20 @@ def main(args=None):
 
         time.sleep(2)
 
+    # Close log file handles
+    for _proc, lf in procs:
+        lf.close()
+
     # ── Collect results and log ──────────────────────────────────
     failures = 0
     run_ids = []
     manifest = f"/tmp/agent-spec-parallel-{pid}-{int(time.time())}.txt"
 
-    for i, proc in enumerate(procs):
-        log_file = log_files[i]
-        run_id, result, cost = _parse_log_for_result(log_file)
+    for i, (proc, _lf) in enumerate(procs):
+        result_data = instance_results[i]
+        run_id = result_data.get("run_id")
+        result = result_data.get("result", "UNKNOWN")
+        cost = result_data.get("cost_usd", 0.0)
 
         if run_id:
             run_ids.append(run_id)
@@ -284,13 +279,13 @@ def main(args=None):
             # Archive instance log
             results_dir = PROJECT_DIR / "results" / run_id
             if results_dir.is_dir():
-                shutil.copy2(log_file, results_dir / "parallel-instance.log")
+                shutil.copy2(log_files[i], results_dir / "parallel-instance.log")
 
             if result != "PASS":
                 failures += 1
                 stderr_tail = ""
                 try:
-                    stderr_tail = Path(log_file).read_text().splitlines()[-15:]
+                    stderr_tail = Path(log_files[i]).read_text().splitlines()[-15:]
                     stderr_tail = "\n".join(stderr_tail)[:500]
                 except (FileNotFoundError, IndexError):
                     pass
@@ -311,7 +306,7 @@ def main(args=None):
             if args.verbose:
                 print(f"\n  Instance {i+1} failed (no run_id). Last 15 lines:", file=sys.stderr)
                 try:
-                    lines = Path(log_file).read_text().splitlines()
+                    lines = Path(log_files[i]).read_text().splitlines()
                     for line in lines[-15:]:
                         print(f"    {line}", file=sys.stderr)
                 except FileNotFoundError:

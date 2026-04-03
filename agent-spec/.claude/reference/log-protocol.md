@@ -2,6 +2,22 @@
 
 All events are JSONL lines appended to `/tmp/agent-spec/{run_id}/events.jsonl`.
 
+## Stdout Protocol
+
+invoke.py emits the same events as JSONL on **stdout** (compact, one per line):
+
+```
+{"event":"run_started","data":{"run_id":"abc","target":"csv-reporter","config":"baseline",...}}
+{"event":"agent_complete","data":{"duration_ms":28000}}
+{"event":"token_update","data":{"input":7,"output":1006,"cost_usd":0.078}}
+{"event":"score","data":{"result":"PASS"}}
+{"event":"run_finished","data":{"run_id":"abc","result":"PASS","cost_usd":0.078,"duration_s":28}}
+```
+
+Human-readable output (headers, spinners, status lines) goes to **stderr**. Parent processes (parallel.py) read stdout JSONL to track child results — no regex parsing needed.
+
+To capture only the structured stream: `python3 scripts/invoke.py ... 2>/dev/null | jq .`
+
 ## Format
 
 ```json
@@ -15,6 +31,7 @@ All events are JSONL lines appended to `/tmp/agent-spec/{run_id}/events.jsonl`.
 ## Well-Known Events
 
 ### Lifecycle
+- `run_started` — run_id, target, config, model, budget, port
 - `sandbox_created` — sandbox, source
 - `files_deleted` — files (comma-separated list)
 - `files_injected` — from (inject directory path)
@@ -23,12 +40,12 @@ All events are JSONL lines appended to `/tmp/agent-spec/{run_id}/events.jsonl`.
 - `setup_failed` — cmd, exit_code, stderr
 - `empty_config` — config (WARN: agent has no instructions)
 - `config_swapped` — config
-- `sidecar_started` — pid, interval
 - `agent_started` — target, config, model, budget, port
 - `agent_complete` — exit_code, duration_ms
 - `agent_error` — exit_code, duration_ms, stderr
 - `agent_timeout` — timeout
 - `run_terminated` — signal, run_id (external SIGTERM/SIGINT/SIGHUP)
+- `run_finished` — run_id, target, config, result, cost_usd, duration_s (terminal event)
 
 ### Verification
 - `verification_output` — output (full verify.sh stdout+stderr), exit_code
@@ -50,8 +67,14 @@ All events are JSONL lines appended to `/tmp/agent-spec/{run_id}/events.jsonl`.
 - `iteration_session_complete` — session_id, final_depth, converged, total_cost_usd, total_duration_ms
 
 ### Metrics
-- `token_update` — input, output, cache_create, cache_read, cost_usd, turns
+- `token_update` — input, output, cache_create, cache_read, cost_usd, turns, duration_ms, duration_api_ms, stop_reason, session_id, is_error, result_message, permission_denials
 - `resource_snapshot` — cpu, mem, disk_free_gb
+
+### Stream Events (only with `--stream` flag)
+- `claude_turn_start` — role (new conversational turn)
+- `claude_tool_use` — tool, tool_use_id (agent called a tool)
+
+Raw Claude stream events are saved to `{run_dir}/stream.jsonl` for post-run analysis.
 
 ## Emitting
 
@@ -102,15 +125,17 @@ jq 'select(.event=="debug:verify")' /tmp/agent-spec/<run_id>/events.jsonl
 
 ## Reading
 
-- Live: `scripts/dashboard.py <run_id>`
-- Stream (compact, no color): `scripts/dashboard.py <run_id> --stream`
-- Tokens: `scripts/tokens.py <run_id>`
-- Session tokens: `scripts/tokens.py --session <session_id>`
-- Score: `scripts/score.py <run_id>`
-- Resources: `scripts/resources.sh <run_id>`
+- Live: `python3 scripts/dashboard.py <run_id>`
+- Stream (compact, no color): `python3 scripts/dashboard.py <run_id> --stream`
+- Score: `python3 scripts/report.py --score <run_id>`
+- Tokens: `python3 scripts/report.py --tokens <run_id>`
+- Session tokens: `python3 scripts/report.py --tokens --session <session_id>`
 - Compare: `python3 scripts/report.py --compare <run_id> <run_id>`
 - Session report: `python3 scripts/report.py --session <session_id>`
 - Full report: `python3 scripts/report.py --all`
-- Config diff: `scripts/dashboard.py --diff <run_id1> <run_id2>`
-- Parallel status: `scripts/dashboard.py --parallel <parallel_run_id>`
+- Baseline save: `python3 scripts/report.py --baseline save <run_id>`
+- Baseline check: `python3 scripts/report.py --baseline check <run_id>`
+- Config diff: `python3 scripts/dashboard.py --diff <run_id1> <run_id2>`
+- Parallel status: `python3 scripts/dashboard.py --parallel <parallel_run_id>`
+- Resources: `python3 scripts/system_monitor.py`
 - Raw: `jq 'select(.event=="token_update")' /tmp/agent-spec/{run_id}/events.jsonl`

@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
 """invoke.py — Run one agent in a sandbox and score the result.
 
+Output protocol:
+  stdout — JSONL events (one per line), parseable by parent processes
+  stderr — Human-readable display (headers, spinners, results)
+
 Usage: python3 scripts/invoke.py <source> <config> <prompt> [options]
 """
 
 import argparse
 import atexit
+import json
 import os
 import shutil
 import signal
@@ -19,11 +24,10 @@ sys.path.insert(0, str(Path(__file__).parent))
 from lib import (
     PROJECT_DIR, RUN_ROOT, SANDBOX_ROOT, DEFAULT_MODEL, DEFAULT_BUDGET, TIMEOUT_DEFAULT,
     SCRIPTS_DIR, apc_log, allocate_port, die, require_file, require_dir,
-    parse_output_json, now_ms, get_baseline_cost, StatusLine,
+    parse_output_json, now_ms, get_baseline_cost, StatusLine, render_event,
     track_pid, _stop_process_tree,
-    DIM, RESET, _IS_TTY,
 )
-from system_monitor import check_preflight, get_disk_usage, get_memory_usage
+from system_monitor import check_preflight, get_disk_usage, get_memory_usage, get_cpu_usage
 
 # ── Globals for cleanup ──────────────────────────────────────────
 
@@ -32,6 +36,88 @@ _agent_proc: subprocess.Popen | None = None
 _keep = False
 _run_dir: Path | None = None
 _results_dir: Path | None = None
+
+
+def emit(level: str, event: str, msg: str, data: dict | None = None):
+    """Write event to events.jsonl AND stdout JSONL stream."""
+    apc_log(level, event, msg, data)
+    print(json.dumps({"event": event, "data": data or {}}), flush=True)
+
+
+def _extract_tool_detail(block: dict) -> str:
+    """Extract the primary argument from a tool_use block for display."""
+    inp = block.get("input", {})
+    name = block.get("name", "")
+
+    if "file_path" in inp:
+        return Path(inp["file_path"]).name
+    if "command" in inp:
+        cmd = inp["command"].strip().split("\n")[0]
+        return cmd[:60]
+    if "pattern" in inp:
+        return inp["pattern"][:40]
+    if "query" in inp:
+        return inp["query"][:40]
+    if "prompt" in inp:
+        return inp["prompt"][:40]
+    if "description" in inp:
+        return inp["description"][:40]
+    if "url" in inp:
+        return inp["url"][:60]
+    return ""
+
+
+def _process_stream_event(se: dict, status: StatusLine):
+    """Translate a Claude stream-json event into our event protocol.
+
+    With -p --verbose, stream-json emits complete messages per line:
+      type=system, type=assistant (with content blocks), type=user (tool results),
+      type=rate_limit_event, type=result
+    """
+    etype = se.get("type", "")
+
+    if etype == "assistant":
+        msg = se.get("message", {})
+        blocks = msg.get("content", [])
+
+        emit("DEBUG", "claude_turn_start", "Assistant turn", {
+            "role": "assistant",
+        })
+
+        # Extract tool uses from content blocks
+        for block in blocks:
+            if block.get("type") == "tool_use":
+                detail = _extract_tool_detail(block)
+                tool_data = {
+                    "tool": block.get("name", ""),
+                    "tool_use_id": block.get("id", ""),
+                    "detail": detail,
+                }
+                emit("INFO", "claude_tool_use", f"Tool: {block.get('name', '?')}", tool_data)
+                render_event({"event": "claude_tool_use", "data": tool_data}, status=status, verbose=True)
+
+        # Update token count from usage if present
+        usage = msg.get("usage", {})
+        if usage:
+            status.update(tokens_out=usage.get("output_tokens", 0))
+
+
+def _emit_resource_snapshot(status: StatusLine):
+    """Collect and emit a resource snapshot with real CPU."""
+    disk = get_disk_usage()
+    mem = get_memory_usage()
+    cpu = get_cpu_usage()
+    snapshot_data = {
+        "cpu": cpu["pct"],
+        "mem": round(mem["pct"], 1),
+        "disk_free_gb": disk["free_gb"],
+    }
+    emit("METRIC", "resource_snapshot", "System resources", snapshot_data)
+    render_event({"event": "resource_snapshot", "data": snapshot_data}, status=status)
+    if disk["status"] == "CRITICAL" or mem["status"] == "CRITICAL":
+        emit("WARN", "resource_warning",
+             f"CRITICAL: disk {disk['free_gb']}GB, mem {mem['pct']:.0f}%",
+             snapshot_data)
 
 
 def _archive_and_cleanup():
@@ -43,7 +129,7 @@ def _archive_and_cleanup():
     # Archive logs to results/
     if _run_dir and _results_dir:
         _results_dir.mkdir(parents=True, exist_ok=True)
-        for artifact in ["events.jsonl", "output.json", "stderr.log"]:
+        for artifact in ["events.jsonl", "output.json", "stderr.log", "stream.jsonl"]:
             src = _run_dir / artifact
             if src.exists():
                 shutil.copy2(src, _results_dir / artifact)
@@ -72,8 +158,8 @@ def _archive_and_cleanup():
 
 def _handle_signal(signum, frame):
     sig_name = signal.Signals(signum).name
-    apc_log("ERROR", "run_terminated", f"Run terminated by {sig_name}",
-            {"signal": sig_name, "run_id": os.environ.get("AGENT_SPEC_RUN_ID", "unknown")})
+    emit("ERROR", "run_terminated", f"Run terminated by {sig_name}",
+         {"signal": sig_name, "run_id": os.environ.get("AGENT_SPEC_RUN_ID", "unknown")})
     sys.exit(1)
 
 
@@ -94,6 +180,7 @@ def main():
     parser.add_argument("--seeds", default="", help="Directory of seed files to copy into workspace")
     parser.add_argument("--port", type=int, default=None)
     parser.add_argument("--verbose", action="store_true", help="Show workspace lifecycle details")
+    parser.add_argument("--stream", action="store_true", help="Use stream-json for real-time Claude events")
     parser.add_argument("--challenge", default="", help="Challenge name (for logging)")
     args = parser.parse_args()
 
@@ -128,14 +215,13 @@ def main():
     target_name = args.challenge or (Path(args.source).name if args.source else Path(args.seeds).parent.name)
     config_name = Path(args.config).name
 
-    # ── Header ───────────────────────────────────────────────────
-    print(f"── {target_name}/{config_name} ({args.model}) ──")
-    print(f"  Run:    {run_id}")
-    print(f"  Budget: ${args.budget}")
-    if verbose:
-        print(f"  Port:   {port}")
-        print(f"  Log:    {_run_dir}/events.jsonl")
-    print()
+    # ── Emit run_started (stdout + stderr + events.jsonl) ────────
+    run_started_data = {
+        "run_id": run_id, "target": target_name, "config": config_name,
+        "model": args.model, "budget": float(args.budget), "port": port,
+    }
+    emit("INFO", "run_started", "Run started", run_started_data)
+    render_event({"event": "run_started", "data": run_started_data}, verbose=verbose)
 
     # ── Phase 2: WORKSPACE ───────────────────────────────────────
     workspace_path = Path(f"{SANDBOX_ROOT}-{run_id}")
@@ -143,14 +229,11 @@ def main():
         die(f"Workspace already exists: {workspace_path}")
 
     if args.source:
-        # Copy source repo into workspace
         shutil.copytree(args.source, workspace_path, symlinks=False)
     else:
-        # Create empty workspace and copy seeds
         workspace_path.mkdir(parents=True)
 
     if args.seeds:
-        # Copy seed files into workspace (on top of source if both provided)
         seeds_dir = Path(args.seeds)
         for item in seeds_dir.iterdir():
             dest = workspace_path / item.name
@@ -167,8 +250,8 @@ def main():
     signal.signal(signal.SIGINT, _handle_signal)
     signal.signal(signal.SIGHUP, _handle_signal)
 
-    apc_log("INFO", "sandbox_created", "Sandbox ready",
-            {"sandbox": str(workspace_path), "source": args.source})
+    emit("DEBUG", "sandbox_created", "Sandbox ready",
+         {"sandbox": str(workspace_path), "source": args.source})
 
     # ── Phase 3: PREPARE ─────────────────────────────────────────
 
@@ -181,10 +264,9 @@ def main():
                     shutil.rmtree(target)
                 else:
                     target.unlink()
-                if verbose:
-                    print(f"  Deleted: {f.strip()}")
-        apc_log("DEBUG", "files_deleted", "Deleted files for agent to produce",
-                {"files": args.delete})
+        delete_data = {"files": args.delete}
+        emit("DEBUG", "files_deleted", "Deleted files for agent to produce", delete_data)
+        render_event({"event": "files_deleted", "data": delete_data}, verbose=verbose)
 
     # 3b. Inject files
     if args.inject:
@@ -195,7 +277,7 @@ def main():
                 shutil.copytree(item, dest, dirs_exist_ok=True)
             else:
                 shutil.copy2(item, dest)
-        apc_log("DEBUG", "files_injected", "Injected files", {"from": args.inject})
+        emit("DEBUG", "files_injected", "Injected files", {"from": args.inject})
 
     # 3c. Setup commands
     if args.setup:
@@ -203,17 +285,16 @@ def main():
             cmd = cmd.strip()
             if not cmd:
                 continue
-            if verbose:
-                print(f"  Setup: {cmd}")
             result = subprocess.run(cmd, shell=True, cwd=workspace_path,
                                     capture_output=True, text=True)
             if result.returncode != 0:
-                apc_log("WARN", "setup_failed", f"Setup failed: {cmd}",
-                        {"cmd": cmd, "exit_code": result.returncode, "stderr": result.stderr[:500]})
+                emit("WARN", "setup_failed", f"Setup failed: {cmd}",
+                     {"cmd": cmd, "exit_code": result.returncode, "stderr": result.stderr[:500]})
             else:
-                apc_log("DEBUG", "setup_command", f"Setup: {cmd}",
-                        {"cmd": cmd, "exit_code": 0})
-        apc_log("DEBUG", "setup_complete", "Setup finished")
+                setup_data = {"cmd": cmd, "exit_code": 0}
+                emit("DEBUG", "setup_command", f"Setup: {cmd}", setup_data)
+                render_event({"event": "setup_command", "data": setup_data}, verbose=verbose)
+        emit("DEBUG", "setup_complete", "Setup finished", {})
 
     # 3d. Swap .claude/
     claude_dir = workspace_path / ".claude"
@@ -224,9 +305,8 @@ def main():
         shutil.copytree(config_path, claude_dir)
     else:
         claude_dir.mkdir()
-        apc_log("WARN", "empty_config", "Agent has no instructions",
-                {"config": config_name})
-    apc_log("INFO", "config_swapped", "Config applied", {"config": config_name})
+        emit("WARN", "empty_config", "Agent has no instructions", {"config": config_name})
+    emit("INFO", "config_swapped", "Config applied", {"config": config_name})
 
     # 3e. Inject emitters
     for emitter in ["_apc.py", "_apc.ts"]:
@@ -236,9 +316,10 @@ def main():
 
     # 3f. Pre-flight resource check
     ok, snapshot = check_preflight()
-    apc_log("INFO", "preflight_check", f"Resources: {snapshot['status_summary']}",
-            {"overall": snapshot["overall"], "cpu": snapshot["cpu_pct"],
-             "mem": snapshot["mem_pct"], "disk_free_gb": snapshot["disk_free_gb"]})
+    preflight_data = {"overall": snapshot["overall"], "cpu": snapshot["cpu_pct"],
+                      "mem": snapshot["mem_pct"], "disk_free_gb": snapshot["disk_free_gb"]}
+    emit("INFO", "preflight_check", f"Resources: {snapshot['status_summary']}", preflight_data)
+    render_event({"event": "preflight_check", "data": preflight_data}, verbose=verbose)
     if not ok:
         die(f"System resources critical — {snapshot['status_summary']}. "
             f"Run 'python3 scripts/system_monitor.py' to see details.")
@@ -250,10 +331,20 @@ def main():
     prompt_text = Path(args.prompt_file).read_text()
     prompt_text = prompt_text.replace("__PORT__", str(port))
 
-    apc_log("INFO", "agent_started", "Agent invoked", {
+    output_format = "stream-json" if args.stream else "json"
+    emit("INFO", "agent_started", "Agent invoked", {
         "target": target_name, "config": config_name,
         "model": args.model, "budget": float(args.budget), "port": port,
+        "stream": args.stream,
     })
+
+    # Create status line for live rendering
+    baseline = get_baseline_cost(target_name, config_name)
+    status = StatusLine(
+        label=f"{target_name}/{config_name}",
+        budget=float(args.budget),
+        baseline_cost=baseline,
+    )
 
     timeout = int(os.environ.get("TIMEOUT", TIMEOUT_DEFAULT))
     start_ms = now_ms()
@@ -262,58 +353,105 @@ def main():
     try:
         with open(_run_dir / "output.json", "w") as out_f, \
              open(stderr_path, "w") as err_f:
-            _agent_proc = subprocess.Popen(
-                ["claude", "-p", prompt_text,
-                 "--output-format", "json",
-                 "--dangerously-skip-permissions",
-                 "--max-budget-usd", args.budget,
-                 "--model", args.model],
-                cwd=workspace_path,
-                stdout=out_f,
-                stderr=err_f,
-            )
-            track_pid(_agent_proc.pid, port, "agent")
 
-            deadline = time.time() + timeout
-            resource_tick = 0
-            while _agent_proc.poll() is None:
-                if time.time() > deadline:
-                    _stop_process_tree(_agent_proc.pid, "agent")
-                    break
-                resource_tick += 1
-                if resource_tick >= 30:  # every 30 ticks × 2s = 60s
-                    resource_tick = 0
-                    disk = get_disk_usage()
-                    mem = get_memory_usage()
-                    if disk["status"] == "CRITICAL" or mem["status"] == "CRITICAL":
-                        apc_log("WARN", "resource_warning",
-                                f"CRITICAL during run: disk {disk['free_gb']}GB, mem {mem['pct']:.0f}%",
-                                {"disk_free_gb": disk["free_gb"], "mem_pct": mem["pct"]})
-                time.sleep(2)
+            claude_cmd = [
+                "claude", "-p", prompt_text,
+                "--output-format", output_format,
+                "--dangerously-skip-permissions",
+                "--max-budget-usd", args.budget,
+                "--model", args.model,
+            ]
+
+            if args.stream:
+                # Stream mode: read NDJSON from stdout in real-time
+                # stream-json with -p requires --verbose
+                claude_cmd.append("--verbose")
+                _agent_proc = subprocess.Popen(
+                    claude_cmd, cwd=workspace_path,
+                    stdout=subprocess.PIPE, stderr=err_f,
+                )
+                track_pid(_agent_proc.pid, port, "agent")
+
+                stream_log_path = _run_dir / "stream.jsonl"
+                with open(stream_log_path, "w") as stream_f:
+                    deadline = time.time() + timeout
+                    for raw_line in _agent_proc.stdout:
+                        if time.time() > deadline:
+                            _stop_process_tree(_agent_proc.pid, "agent")
+                            break
+                        line = raw_line.decode("utf-8", errors="replace").strip()
+                        if not line:
+                            continue
+
+                        # Archive every stream line
+                        stream_f.write(line + "\n")
+
+                        try:
+                            se = json.loads(line)
+                        except json.JSONDecodeError:
+                            continue
+
+                        etype = se.get("type", "")
+
+                        # The final result blob — write to output.json for compat
+                        if etype == "result":
+                            out_f.write(json.dumps(se))
+
+                        # Translate high-value stream events into our protocol
+                        _process_stream_event(se, status)
+
+                    _agent_proc.wait()
+
+            else:
+                # Default mode: write output.json at end
+                _agent_proc = subprocess.Popen(
+                    claude_cmd, cwd=workspace_path,
+                    stdout=out_f, stderr=err_f,
+                )
+                track_pid(_agent_proc.pid, port, "agent")
+
+                deadline = time.time() + timeout
+                resource_tick = 0
+                while _agent_proc.poll() is None:
+                    if time.time() > deadline:
+                        _stop_process_tree(_agent_proc.pid, "agent")
+                        break
+                    resource_tick += 1
+                    if resource_tick >= 15:  # every 15 ticks × 2s = 30s
+                        resource_tick = 0
+                        _emit_resource_snapshot(status)
+                    status.update()
+                    time.sleep(2)
 
         exit_code = _agent_proc.returncode if _agent_proc.returncode is not None else 124
 
     except Exception as e:
         exit_code = 1
-        apc_log("ERROR", "agent_error", f"Failed to start agent: {e}",
-                {"exit_code": 1, "duration_ms": now_ms() - start_ms})
+        emit("ERROR", "agent_error", f"Failed to start agent: {e}",
+             {"exit_code": 1, "duration_ms": now_ms() - start_ms})
 
     duration_ms = now_ms() - start_ms
 
-    if exit_code == 124 or (_agent_proc and _agent_proc.returncode is None):
-        apc_log("ERROR", "agent_timeout", f"Agent timed out after {timeout}s",
-                {"timeout": timeout})
+    # Post-run resource snapshot (bookend — especially useful for stream mode)
+    _emit_resource_snapshot(status)
+
+    timed_out = exit_code == 124 or (_agent_proc and _agent_proc.returncode is None)
+
+    if timed_out:
+        emit("ERROR", "agent_timeout", f"Agent timed out after {timeout}s",
+             {"timeout": timeout})
+        time.sleep(2)
     elif exit_code == 0:
-        apc_log("INFO", "agent_complete", "Agent finished",
-                {"exit_code": 0, "duration_ms": duration_ms})
+        emit("INFO", "agent_complete", "Agent finished",
+             {"exit_code": 0, "duration_ms": duration_ms})
     else:
         stderr_tail = ""
         stderr_file = _run_dir / "stderr.log"
         if stderr_file.exists():
             lines = stderr_file.read_text().splitlines()
             stderr_tail = " ".join(lines[-5:])[:200]
-        apc_log("ERROR", "agent_error", f"Agent failed (exit {exit_code})",
-                {"exit_code": exit_code, "duration_ms": duration_ms, "stderr": stderr_tail})
+        emit("ERROR", "agent_error", f"Agent failed (exit {exit_code})",
+             {"exit_code": exit_code, "duration_ms": duration_ms, "stderr": stderr_tail})
 
     # ── Phase 5: METRICS ─────────────────────────────────────────
     output_file = _run_dir / "output.json"
@@ -321,8 +459,14 @@ def main():
     if output_file.exists() and output_file.stat().st_size > 0:
         tokens = parse_output_json(output_file)
         if tokens:
-            apc_log("METRIC", "token_update", "Token usage", tokens)
+            if timed_out:
+                tokens["note"] = "timeout"
+            emit("METRIC", "token_update", "Token usage", tokens)
+            render_event({"event": "token_update", "data": tokens}, status=status)
             final_cost = tokens.get("cost_usd", final_cost)
+    elif timed_out:
+        emit("METRIC", "token_update", "Token usage (unavailable after timeout)",
+             {"input": 0, "output": 0, "cost_usd": 0, "note": "timeout_no_output"})
 
     # ── Phase 6: VERIFY ──────────────────────────────────────────
     result_str = "N/A"
@@ -337,46 +481,43 @@ def main():
         )
         output = vresult.stdout + vresult.stderr
 
-        apc_log("INFO", "verification_output", "Verify script output",
-                {"output": output[:5000], "exit_code": vresult.returncode})
+        verify_data = {"output": output[:5000], "exit_code": vresult.returncode}
+        emit("INFO", "verification_output", "Verify script output", verify_data)
+        render_event({"event": "verification_output", "data": verify_data}, verbose=verbose)
 
         # Parse individual test results
         for line in output.splitlines():
             if "PASS:" in line and "RESULT:" not in line:
                 test_name = line.split("PASS:")[-1].strip()
-                apc_log("INFO", "test_passed", "Test passed", {"test_name": test_name})
+                test_data = {"test_name": test_name}
+                emit("INFO", "test_passed", "Test passed", test_data)
+                render_event({"event": "test_passed", "data": test_data}, verbose=verbose)
             elif "FAIL:" in line and "RESULT:" not in line:
                 test_name = line.split("FAIL:")[-1].strip()
-                apc_log("ERROR", "test_failed", "Test failed", {"test_name": test_name})
+                test_data = {"test_name": test_name}
+                emit("ERROR", "test_failed", "Test failed", test_data)
+                render_event({"event": "test_failed", "data": test_data}, verbose=verbose)
 
         # Parse final result
         if "RESULT: PASS" in output:
             result_str = "PASS"
-            apc_log("INFO", "score", "PASS", {"result": "PASS"})
+            emit("INFO", "score", "PASS", {"result": "PASS"})
         elif "RESULT: FAIL" in output:
             result_str = "FAIL"
-            apc_log("ERROR", "score", "FAIL", {"result": "FAIL"})
+            emit("ERROR", "score", "FAIL", {"result": "FAIL"})
         else:
-            apc_log("WARN", "score", "No RESULT line", {"result": "N/A"})
+            emit("WARN", "score", "No RESULT line", {"result": "N/A"})
 
-        # Show verification output in verbose mode
-        if verbose and output.strip():
-            print()
-            print(f"  {DIM}── verify ──{RESET}" if _IS_TTY else "  -- verify --")
-            for line in output.strip().splitlines():
-                print(f"  {DIM}{line}{RESET}" if _IS_TTY else f"  {line}")
+    # ── Final: run_finished (the terminal event) ─────────────────
+    finished_data = {
+        "run_id": run_id, "target": target_name, "config": config_name,
+        "result": result_str, "cost_usd": final_cost,
+        "duration_s": duration_ms / 1000,
+    }
+    emit("INFO", "run_finished", "Run complete", finished_data)
+    render_event({"event": "run_finished", "data": finished_data}, status=status)
 
-    # ── Final status line ────────────────────────────────────────
-    baseline = get_baseline_cost(target_name, config_name)
-    status = StatusLine(
-        label=f"{target_name}/{config_name}",
-        budget=float(args.budget),
-        baseline_cost=baseline,
-    )
-    status.finish(result_str, cost=final_cost, duration_s=duration_ms / 1000)
-
-    if verbose:
-        print(f"  Results: {_results_dir}/")
+    render_event({"event": "results_dir", "data": {"path": str(_results_dir)}}, verbose=verbose)
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 ---
 name: run-eval
 description: Run an evaluation against an eval with a specific config
-argument-hint: <eval> [config] [--model MODEL] [--keep]
+argument-hint: <eval> [config] [--model MODEL] [--challenge NAME] [--keep]
 ---
 
 # /run-eval — Run an evaluation
@@ -13,43 +13,34 @@ Run a Claude agent in a workspace, then score the result.
 Confirm with the user:
 
 1. Eval and config to run
-2. Single run or parallel (default: single)
-3. If parallel: how many instances (default: 1)
+2. Single challenge or all challenges (matrix evals run all by default)
+3. Single run or parallel (default: single)
 
 Do NOT launch until the user confirms.
 
 ## Arguments
 
-- `$1` — eval name (directory name in `evals/`, e.g., `csv-reporter`)
-- `$2` — config name (directory name in `evals/<eval>/configs/`, default: `baseline`)
+- `$1` — eval name (directory in `evals/`)
+- `$2` — config name (directory in `evals/<eval>/configs/`, default: `baseline`)
 - `--model <name>` — override model (default from EVAL.md frontmatter)
-- `--keep` — keep workspace after completion for inspection
 - `--budget <usd>` — override budget
+- `--challenge <name>` — run only this challenge (matrix evals)
+- `--keep` — keep workspace after completion for inspection
 
 ## Steps
 
-1. Read `evals/$1/EVAL.md` frontmatter to get source path, model, budget, setup commands, delete list, and reference
-2. Extract the prompt from the EVAL.md body (everything after the second `---`)
-3. Resolve the source path relative to the evals directory
-4. Run the evaluation:
+1. Run the evaluation:
 
 ```bash
-EVAL_DIR="$CLAUDE_PROJECT_DIR/evals/$1"
-CONFIG_DIR="$EVAL_DIR/configs/${2:-baseline}"
-VERIFY_FILE="$EVAL_DIR/verify.sh"
-
-# Parse EVAL.md frontmatter for source, model, budget
-python3 "$CLAUDE_PROJECT_DIR/scripts/invoke.py" \
-  "<source from EVAL.md>" \
-  "$CONFIG_DIR" \
-  "<prompt from EVAL.md body>" \
-  --verify "$VERIFY_FILE" \
-  --model "${MODEL:-<model from EVAL.md>}" \
-  --budget "${BUDGET:-<budget from EVAL.md>}"
+python3 scripts/run_eval.py <eval> <config> [--model MODEL] [--budget USD] [--challenge NAME] [--keep]
 ```
 
-5. After completion, show the dashboard summary:
+`run_eval.py` handles everything: EVAL.md parsing, config resolution, challenge iteration, prompt templating, and invoke.py delegation.
+
+2. After completion, show results:
 
 ```bash
-python3 "$CLAUDE_PROJECT_DIR/scripts/dashboard.py" --latest --summary
+python3 scripts/dashboard.py --latest --summary
 ```
+
+Use `run_in_background: true` for the run command. Monitor with `python3 scripts/dashboard.py --latest`.

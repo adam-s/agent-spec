@@ -87,16 +87,16 @@ RECURSE:
      Build a monitoring table. Stop early if agent is stuck.
 
   5. SCORE
-     python3 scripts/score.py <run_id>
+     python3 scripts/report.py --score <run_id>
      python3 scripts/report.py <run_id1> <run_id2> ... --group-by config
 
      For two-run comparison:
        python3 scripts/report.py --compare <id1> <id2>
 
   6. REGRESSION CHECK
-     python3 scripts/check_regression.py <run_id>
+     python3 scripts/report.py --baseline check <run_id>
      If first iteration, save baseline:
-       python3 scripts/save_baseline.py <run_id>
+       python3 scripts/report.py --baseline save <run_id>
 
   7. STOP CONDITION CHECK
      if all instances PASS and no regressions:

@@ -45,15 +45,20 @@ def cmd_clean(args):
 
 
 def cmd_tokens(args):
-    """Show token metrics."""
-    import tokens
-    tokens.main(args)
+    """Show token metrics (delegates to report.py)."""
+    import report
+    if args.session:
+        report.print_tokens_session(args.session)
+    elif args.run_id:
+        report.print_tokens_single(args.run_id)
+    else:
+        print("Usage: agent-spec tokens <run_id> or agent-spec tokens --session <id>", file=sys.stderr)
+        sys.exit(1)
 
 
 def cmd_monitor(args):
     """Show system resource status."""
     import system_monitor
-    # Translate CLI args to system_monitor's expected format
     if args.watch:
         args.command = "watch"
     else:
@@ -129,6 +134,7 @@ def build_parser():
     p_run.add_argument("--configs", default="", help="Comma-separated configs for A/B test")
     p_run.add_argument("--models", default="", help="Comma-separated models for benchmarking")
     p_run.add_argument("--stimuli-dir", default="", help="Per-instance inject files")
+    p_run.add_argument("--stream", action="store_true", help="Use stream-json for real-time Claude events")
     p_run.add_argument("--verbose", action="store_true", help="Show sandbox lifecycle details")
     p_run.set_defaults(func=cmd_run)
 
