@@ -24,6 +24,10 @@ State what you are about to launch: how many agents, which target, which config.
 
 All eval and parallel runs MUST use `run_in_background: true` in the Bash tool. Never block the conversation waiting for an agent to finish. Print the monitoring command and let the system notify on completion.
 
+## Output Capture
+
+When running multiple sequential agents in a loop, each run MUST print its result to stdout before starting the next. Never suppress or filter run output with `tail -1`, `head`, or `grep` — capture the full output, then summarize. See @.claude/rules/observability.md.
+
 ## Sequential Over Parallel
 
 When the user asks to "run it a few times" or "check consistency," default to sequential runs (one at a time) unless they explicitly request parallel. Sequential is slower but won't overload the machine.

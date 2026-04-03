@@ -31,6 +31,20 @@ agent-spec operates at three nested levels. Understanding which level you're at 
 
 See @.claude/reference/recursive-training.md for full detail, guards, and convergence criteria.
 
+## Self-Improvement Loop
+
+Evals exist to test these instructions, not as deliverables. When an experiment fails — bad observability, wrong assumptions, broken output — the failure is signal about the `.claude/` instructions, not about the eval.
+
+The cycle:
+1. Attempt an experiment
+2. When something goes wrong, STOP running agents
+3. Diagnose which `.claude/` instruction caused the failure (not the eval, not the model — the instruction)
+4. Fix the instruction
+5. Delete the failed eval artifacts and start fresh — don't patch around failures
+6. Attempt again
+
+This is Level 0 self-improvement. The `/iterate` skill improves Level 2 (target `.claude/` directories). This cycle improves Level 0 (the orchestrator's own instructions).
+
 ## Exploratory Project
 
 This is early-stage. No backwards compatibility. When we improve something, we update or delete everything that uses the old version. Old code, stale references, and orphaned patterns are actively harmful — they mislead future agents and waste tokens. If a change makes something obsolete, removing it is part of the change.
