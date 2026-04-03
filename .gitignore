@@ -9,3 +9,4 @@ __pycache__/
 !/sqlite-window-queries/
 !/README.md
 !/.gitignore
+skills/

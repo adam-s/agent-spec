@@ -285,9 +285,11 @@ def main():
 
     # 3c. Setup commands
     if args.setup:
-        for cmd in args.setup.split(";"):
+        # Split by semicolons or newlines, skip shebangs and blank lines
+        setup_lines = args.setup.replace(";", "\n").split("\n")
+        for cmd in setup_lines:
             cmd = cmd.strip()
-            if not cmd:
+            if not cmd or cmd.startswith("#"):
                 continue
             result = subprocess.run(cmd, shell=True, cwd=workspace_path,
                                     capture_output=True, text=True)
@@ -509,6 +511,10 @@ def main():
         elif "RESULT: FAIL" in output:
             result_str = "FAIL"
             emit("ERROR", "score", "FAIL", {"result": "FAIL"})
+        elif vresult.returncode != 0:
+            result_str = "FAIL"
+            emit("WARN", "score", "No RESULT line but verify.sh exited non-zero — treating as FAIL",
+                 {"result": "FAIL", "exit_code": vresult.returncode})
         else:
             emit("WARN", "score", "No RESULT line", {"result": "N/A"})
 

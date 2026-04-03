@@ -146,6 +146,67 @@ All results for one eval go in `evals/<name>/results/`. Each run produces a dire
 
 For a matrix eval, results are tagged with both challenge and config names so they can be grouped and compared.
 
+## Environment Setup
+
+Sandboxes run on the host machine. Dependencies must be installed without polluting the global environment. setup.sh handles this before the agent starts; verify.sh must also be self-sufficient (the agent may modify the environment).
+
+### Python
+
+Create a `.venv` in the workspace. The agent and verify.sh both use it.
+
+**setup.sh:**
+
+```bash
+#!/bin/bash
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt --quiet
+```
+
+**verify.sh:**
+
+```bash
+#!/bin/bash
+[ -d .venv ] || python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt --quiet
+OUTPUT=$(.venv/bin/python3 test.py 2>&1)
+echo "$OUTPUT"
+if echo "$OUTPUT" | grep -q "RESULT: PASS"; then echo "RESULT: PASS"; else echo "RESULT: FAIL"; fi
+```
+
+**prompt.md** — tell the agent the venv exists:
+
+```markdown
+A Python virtual environment is available at `.venv/`. Use `.venv/bin/python3` to run code.
+```
+
+### TypeScript / Node.js
+
+Use npm in the workspace directly. No global installs needed.
+
+**setup.sh:**
+
+```bash
+#!/bin/bash
+npm install --silent
+```
+
+**verify.sh:**
+
+```bash
+#!/bin/bash
+[ -d node_modules ] || npm install --silent
+OUTPUT=$(node test.js 2>&1)
+echo "$OUTPUT"
+if echo "$OUTPUT" | grep -q "RESULT: PASS"; then echo "RESULT: PASS"; else echo "RESULT: FAIL"; fi
+```
+
+### Conventions
+
+- setup.sh creates the environment; verify.sh recreates it if missing (agent may have broken it)
+- Never use `--break-system-packages` — always isolate with venv or node_modules
+- Seeds should include dependency manifests (requirements.txt, package.json) not lockfiles
+- Tell the agent about the environment in prompt.md — don't make it guess
+
 ## verify.sh
 
 The scoring script. Must follow the scoring contract:
@@ -153,6 +214,7 @@ The scoring script. Must follow the scoring contract:
 - Always exit 0 — the exit code of verify.sh itself is not the scoring mechanism
 - Print `RESULT: PASS` or `RESULT: FAIL` as the verdict
 - Can use test exit codes internally (e.g., `python3 test.py; if [ $? -eq 0 ]; then echo "RESULT: PASS"`)
+- Only verify.sh prints `RESULT:` — test scripts should use exit codes, not the RESULT protocol. This keeps tests reusable and avoids duplicate RESULT lines in output.
 
 ## Extending
 
