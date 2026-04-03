@@ -109,10 +109,20 @@ RECURSE:
 
   8. OBSERVE (mandatory before diagnosis)
      For EACH failing instance:
-       a. python3 scripts/dashboard.py <run_id> --stream | grep -E "score|FAIL|ERROR|verification"
+       a. Read tool trace: extract tool sequence from events.jsonl
        b. Read produced code: ls results/<run_id>/produced/
        c. Read verify.sh output: check verification_output event in events.jsonl
        d. If config snapshot exists: python3 scripts/dashboard.py --diff <prev_id> <this_id>
+
+     If observation doesn't reveal the cause, escalate:
+       e. Diff produced code against the known-good solution (if available)
+          to find where the agent diverged
+       f. Isolate variables — re-run the same challenge with a different
+          prompt variant or stripped config to identify which factor matters
+       g. Check token usage — if the agent used most of its budget,
+          instructions may be getting compacted away
+       h. Find the first wrong decision in the tool trace and work forward —
+          what did the agent do instead of what it should have done?
 
      Do NOT skip this step. Diagnosis without observation leads to wrong fixes.
 
