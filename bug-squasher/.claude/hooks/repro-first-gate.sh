@@ -6,7 +6,8 @@
 INPUT=$(cat)
 
 # Check if a repro file already exists in the workspace
-if ls "$CLAUDE_PROJECT_DIR"/repro.* "$CLAUDE_PROJECT_DIR"/repro_*.* 2>/dev/null | head -1 > /dev/null 2>&1; then
+REPRO_EXISTS=$(find "$CLAUDE_PROJECT_DIR" -maxdepth 1 -name "repro.*" -o -name "repro_*.*" 2>/dev/null | head -1)
+if [ -n "$REPRO_EXISTS" ]; then
     exit 0
 fi
 
