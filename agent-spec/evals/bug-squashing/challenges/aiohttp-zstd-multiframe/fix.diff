@@ -6,14 +6,14 @@ Date:   Mon Mar 30 20:59:29 2026 +0200
 
 diff --git a/CHANGES/12234.bugfix.rst b/CHANGES/12234.bugfix.rst
 new file mode 100644
-index 000000000..64bcfa24f
+index 0000000..64bcfa2
 --- /dev/null
 +++ b/CHANGES/12234.bugfix.rst
 @@ -0,0 +1,2 @@
 +Fixed zstd decompression failing with ``ClientPayloadError`` when the server
 +sends a response as multiple zstd frames -- by :user:`josu-moreno`.
 diff --git a/CONTRIBUTORS.txt b/CONTRIBUTORS.txt
-index c3c16f82e..4a3934e7d 100644
+index c3c16f8..4a3934e 100644
 --- a/CONTRIBUTORS.txt
 +++ b/CONTRIBUTORS.txt
 @@ -214,6 +214,7 @@ Jordan Borean
@@ -25,7 +25,7 @@ index c3c16f82e..4a3934e7d 100644
  Julien Duponchelle
  Jungkook Park
 diff --git a/aiohttp/compression_utils.py b/aiohttp/compression_utils.py
-index 0bc4a30d8..2a8818c42 100644
+index 0bc4a30..2a8818c 100644
 --- a/aiohttp/compression_utils.py
 +++ b/aiohttp/compression_utils.py
 @@ -330,6 +330,7 @@ class ZSTDDecompressor(DecompressionBaseHandler):
@@ -72,7 +72,7 @@ index 0bc4a30d8..2a8818c42 100644
      def flush(self) -> bytes:
          return b""
 diff --git a/tests/test_compression_utils.py b/tests/test_compression_utils.py
-index fdaf91b36..3362b8fee 100644
+index fdaf91b..3362b8f 100644
 --- a/tests/test_compression_utils.py
 +++ b/tests/test_compression_utils.py
 @@ -1,8 +1,23 @@
@@ -144,7 +144,7 @@ index fdaf91b36..3362b8fee 100644
 +    result2 = d.decompress_sync(frame3)
 +    assert result2 == b"BBBBCCCC"
 diff --git a/tests/test_http_parser.py b/tests/test_http_parser.py
-index 1bf80d271..6e877aaac 100644
+index 1bf80d2..6e877aa 100644
 --- a/tests/test_http_parser.py
 +++ b/tests/test_http_parser.py
 @@ -2081,6 +2081,79 @@ class TestParsePayload:

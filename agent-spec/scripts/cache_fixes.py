@@ -63,17 +63,11 @@ def cache_fix(name: str, repo_url: str, commit: str) -> bool:
     fix_path = challenge_dir / "fix.diff"
 
     with tempfile.TemporaryDirectory(prefix=f"fix-{name}-") as tmpdir:
-        # Shallow clone with just enough depth to get the fix commit
-        result = subprocess.run(
-            ["git", "clone", "--depth", "2", "--no-checkout", repo_url, tmpdir],
+        # Clone with enough depth to reach merge parents
+        subprocess.run(
+            ["git", "clone", "--depth", "50", "--no-checkout", repo_url, tmpdir],
             capture_output=True, text=True,
         )
-        if result.returncode != 0:
-            # Try deeper clone for merge commits
-            subprocess.run(
-                ["git", "clone", "--depth", "50", "--no-checkout", repo_url, tmpdir],
-                capture_output=True, text=True,
-            )
 
         # Fetch the specific commit
         subprocess.run(
@@ -87,9 +81,9 @@ def cache_fix(name: str, repo_url: str, commit: str) -> bool:
             capture_output=True, text=True,
         )
         if parents.returncode == 0:
-            # Merge commit: diff between first parent and second parent
+            # Merge commit: diff the feature branch against first parent
             result = subprocess.run(
-                ["git", "-C", tmpdir, "diff", f"{commit}^1..{commit}^2"],
+                ["git", "-C", tmpdir, "diff", f"{commit}^1", f"{commit}^2"],
                 capture_output=True, text=True,
             )
         else:
@@ -103,7 +97,17 @@ def cache_fix(name: str, repo_url: str, commit: str) -> bool:
             print(f"  FAIL {name}: could not get diff for {commit[:8]}")
             return False
 
-        fix_path.write_text(result.stdout)
+        # For merge commits, prepend the commit message for context
+        if parents.returncode == 0:
+            msg = subprocess.run(
+                ["git", "-C", tmpdir, "show", "--no-patch", commit],
+                capture_output=True, text=True,
+            )
+            output = msg.stdout + "\n" + result.stdout if msg.returncode == 0 else result.stdout
+        else:
+            output = result.stdout
+
+        fix_path.write_text(output)
         lines = result.stdout.count("\n")
         print(f"  OK   {name}: {lines} lines -> fix.diff")
         return True

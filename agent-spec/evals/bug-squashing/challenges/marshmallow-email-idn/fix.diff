@@ -9,7 +9,7 @@ Date:   Thu Apr 2 08:53:27 2026 -0400
     * Fix typo
 
 diff --git a/CHANGELOG.rst b/CHANGELOG.rst
-index bad4e19e..68cbab25 100644
+index bad4e19..68cbab2 100644
 --- a/CHANGELOG.rst
 +++ b/CHANGELOG.rst
 @@ -6,9 +6,10 @@ Changelog
@@ -26,7 +26,7 @@ index bad4e19e..68cbab25 100644
  4.2.3 (2026-03-25)
  ------------------
 diff --git a/src/marshmallow/validate.py b/src/marshmallow/validate.py
-index 3d2ce442..668c5a36 100644
+index 3d2ce44..668c5a3 100644
 --- a/src/marshmallow/validate.py
 +++ b/src/marshmallow/validate.py
 @@ -13,6 +13,7 @@ if typing.TYPE_CHECKING:
@@ -110,7 +110,7 @@ index 3d2ce442..668c5a36 100644
  
          return value
 diff --git a/tests/test_validate.py b/tests/test_validate.py
-index 00fca55b..e16ee020 100644
+index 00fca55..e16ee02 100644
 --- a/tests/test_validate.py
 +++ b/tests/test_validate.py
 @@ -368,6 +368,37 @@ def test_email_invalid(invalid_email):

@@ -1,7 +1,48 @@
 commit dafe7f1e37cf78cc7f11a9706c62a23e0dba9010
-Merge: 795f4eaf 051fd663
+Merge: 795f4ea 051fd66
 Author: David Lord <davidism@gmail.com>
 Date:   Mon Mar 23 09:44:30 2026 -0700
 
     fix trailing whitespace in WWW-Authenticate bearer (#3129)
 
+diff --git a/CHANGES.rst b/CHANGES.rst
+index 4f142a6..0b762b0 100644
+--- a/CHANGES.rst
++++ b/CHANGES.rst
+@@ -7,6 +7,8 @@ Unreleased
+ 
+ -   ``parse_list_header`` preserves partially quoted items, discards empty
+     items, and returns empty for unclosed quoted values. :pr:`3128`
++-   ``WWWAuthenticate.to_header`` does not produce a trailing space when there
++    are no parameters. :issue:`3127`
+ 
+ 
+ Version 3.1.6
+diff --git a/src/werkzeug/datastructures/auth.py b/src/werkzeug/datastructures/auth.py
+index 42f7aa4..0a3141e 100644
+--- a/src/werkzeug/datastructures/auth.py
++++ b/src/werkzeug/datastructures/auth.py
+@@ -295,6 +295,9 @@ class WWWAuthenticate:
+         if self.token is not None:
+             return f"{self.type.title()} {self.token}"
+ 
++        if not self.parameters:
++            return self.type.title()
++
+         if self.type == "digest":
+             items = []
+ 
+diff --git a/tests/test_http.py b/tests/test_http.py
+index b27a030..5f8a104 100644
+--- a/tests/test_http.py
++++ b/tests/test_http.py
+@@ -259,6 +259,9 @@ class TestHTTPUtility:
+         wa.realm = "Foo Bar"
+         assert wa.to_header() == 'Basic realm="Foo Bar"'
+ 
++        wa = WWWAuthenticate("bearer")
++        assert wa.to_header() == "Bearer"
++
+         wa = WWWAuthenticate.from_header(
+             'Digest realm="testrealm@host.com",'
+             ' qop="auth,auth-int",'

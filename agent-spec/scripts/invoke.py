@@ -494,8 +494,7 @@ def main():
             emit("METRIC", "token_update", "Token usage", tokens)
             render_event({"event": "token_update", "data": tokens}, status=status)
             final_cost = tokens.get("cost_usd", final_cost)
-            final_tokens = (tokens.get("input", 0) + tokens.get("output", 0)
-                            + tokens.get("cache_create", 0) + tokens.get("cache_read", 0))
+            final_tokens = tokens.get("input", 0) + tokens.get("output", 0)
     elif timed_out:
         emit("METRIC", "token_update", "Token usage (unavailable after timeout)",
              {"input": 0, "output": 0, "cost_usd": 0, "note": "timeout_no_output"})

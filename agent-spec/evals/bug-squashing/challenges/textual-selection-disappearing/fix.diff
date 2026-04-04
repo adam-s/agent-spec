@@ -1,3 +1,12 @@
+commit 04b03c8db64266a6a7811cc161bae9986e53b1a1
+Merge: e84eacc 111d9a0
+Author: Will McGugan <willmcgugan@gmail.com>
+Date:   Sun Mar 29 10:56:02 2026 +0700
+
+    Merge pull request #6455 from Textualize/sel-disappear-fix
+    
+    fix selection disappearing
+
 diff --git a/CHANGELOG.md b/CHANGELOG.md
 index 9dff90f..3a82cce 100644
 --- a/CHANGELOG.md

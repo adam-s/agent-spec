@@ -6,7 +6,7 @@ Date:   Thu Mar 19 23:43:36 2026 -0400
 
 diff --git a/.changes/next-release/bugfix-s3-17308.json b/.changes/next-release/bugfix-s3-17308.json
 new file mode 100644
-index 000000000..f831c5db5
+index 0000000..f831c5d
 --- /dev/null
 +++ b/.changes/next-release/bugfix-s3-17308.json
 @@ -0,0 +1,5 @@
@@ -16,7 +16,7 @@ index 000000000..f831c5db5
 +  "description": "Fix aws-chunked requests with non-seekable streams sending both ``Content-Length`` and ``Transfer-Encoding: chunked``, which violated HTTP/1.1 (RFC 7230) and caused ``SignatureDoesNotMatch`` errors."
 +}
 diff --git a/botocore/httpchecksum.py b/botocore/httpchecksum.py
-index 6bd579519..bf4616f86 100644
+index 6bd5795..bf4616f 100644
 --- a/botocore/httpchecksum.py
 +++ b/botocore/httpchecksum.py
 @@ -472,16 +472,22 @@ def _apply_request_trailer_checksum(request):
@@ -48,7 +48,7 @@ index 6bd579519..bf4616f86 100644
      if isinstance(body, (bytes, bytearray)):
          body = io.BytesIO(body)
 diff --git a/tests/functional/test_s3.py b/tests/functional/test_s3.py
-index 73ac81f94..edc2fcd43 100644
+index 73ac81f..edc2fcd 100644
 --- a/tests/functional/test_s3.py
 +++ b/tests/functional/test_s3.py
 @@ -11,6 +11,7 @@
@@ -111,7 +111,7 @@ index 73ac81f94..edc2fcd43 100644
          with self.http_stubber:
              self.client.put_object(Bucket="foo", Key="bar", Body="")
 diff --git a/tests/unit/test_httpchecksum.py b/tests/unit/test_httpchecksum.py
-index 8277e7c2a..e1ce729b7 100644
+index 8277e7c..e1ce729 100644
 --- a/tests/unit/test_httpchecksum.py
 +++ b/tests/unit/test_httpchecksum.py
 @@ -10,6 +10,7 @@
