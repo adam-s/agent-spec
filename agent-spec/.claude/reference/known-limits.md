@@ -54,6 +54,14 @@ Sonnet uses fewer tokens (-59%) and turns (-50%) but costs more (+40%) due to pr
 - 6-instance config x model matrix: works, clean cleanup
 - Concurrent parallel runs on different targets: untested (potential port collision)
 
+## Hooks in Headless Mode
+
+Project hooks (`.claude/settings.json`) do not fire for sub-agents launched via `claude -p` with `--dangerously-skip-permissions`. Confirmed 2026-04-04: a PreToolUse hook with additionalContext was placed in the workspace `.claude/settings.json` but produced zero hook output across 3 runs.
+
+This means Level 2 products that use hooks for behavioral enforcement (e.g., reproduce-first gate) won't work when tested via agent-spec eval runs. Hooks only work in interactive sessions.
+
+**Workaround:** For behaviors that must be enforced in headless mode, use prompt injection via the eval prompt or CLAUDE.md instructions. Hooks are still valuable for the product's interactive use — they just can't be tested through the eval harness.
+
 ## Agent Resilience
 
 Agents ignore contradictory CLAUDE.md instructions when project structure provides strong signal:
