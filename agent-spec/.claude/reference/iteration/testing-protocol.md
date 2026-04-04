@@ -20,16 +20,7 @@ See @.claude/reference/eval-definition.md for the full EVAL.md schema, field ref
 
 ## Cordyceps Injection
 
-The harness can modify the workspace before the agent sees it:
-
-- **Delete files** (`delete`) — remove files so the agent must produce them from scratch
-- **Inject emitters** (`_apc.py`, `_apc.ts`) — add telemetry
-- **Place `.claude/`** — set the agent's instructions
-- **Inject verify scripts** — add scoring logic
-- **Inject setup scripts** — run commands before the agent starts
-- **Modify any file** — anything in the workspace can be altered, added, or replaced
-
-The workspace is disposable. If built from a source repo, the original is never modified.
+See @.claude/reference/cordyceps.md for the full cordyceps reference — mechanisms, order of operations, and common patterns.
 
 ## Scoring Contract
 
