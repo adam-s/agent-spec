@@ -64,6 +64,9 @@ python3 scripts/report.py --all                      # All runs
 python3 scripts/report.py --all --group-by config    # Grouped comparison
 python3 scripts/report.py --baseline save <run_id>   # Save baseline
 python3 scripts/report.py --baseline check <run_id>  # Check for regression
+python3 scripts/behavior.py <run_id>                 # Behavior scorecard
+python3 scripts/behavior.py --all --group-by target  # Behavior by challenge
+python3 scripts/behavior.py --all --group-by result  # Behavior vs outcome
 python3 scripts/dashboard.py <run_id>                # Live event tail
 python3 scripts/dashboard.py --diff <id1> <id2>      # Config diff
 python3 scripts/system_monitor.py                    # Resource status
