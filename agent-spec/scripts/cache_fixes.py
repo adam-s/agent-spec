@@ -50,6 +50,10 @@ CHALLENGES = {
         "repo": "https://github.com/encode/httpcore.git",
         "commit": "10a658221deb38a4c5b16db55ab554b0bf731707",
     },
+    "sqlalchemy-orm-update-wrong-column": {
+        "repo": "https://github.com/sqlalchemy/sqlalchemy.git",
+        "commit": "dc0d0817622435ea46b33575fd4f84d3959dc42d",
+    },
 }
 
 

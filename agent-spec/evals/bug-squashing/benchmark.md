@@ -1,6 +1,6 @@
 # Bug-Squashing Benchmark
 
-8 real bugs from open-source Python repos, all fixed after May 2025 (post training cutoff). Each has a known fix commit and test suite.
+9 real bugs from open-source Python repos, all fixed after May 2025 (post training cutoff). Each has a known fix commit and test suite.
 
 ## Level Mapping
 
@@ -13,7 +13,7 @@
 
 The eval symlinks to the product: `configs/bug-squasher → ../../../../bug-squasher/.claude`.
 
-## Training Set (5 bugs)
+## Training Set (6 bugs)
 
 The reviewer agent sees these bugs and their fixes during instruction tuning.
 
@@ -77,11 +77,22 @@ The reviewer agent sees these bugs and their fixes during instruction tuning.
 | Bug type | HTTP protocol (Content-Length + Transfer-Encoding: chunked conflict) |
 | Complexity | Medium-high — protocol-level fix |
 
+### 6. sqlalchemy-orm-update-wrong-column
+
+| Field | Value |
+|-------|-------|
+| Repo | sqlalchemy/sqlalchemy |
+| Issue | #12692 |
+| Fix commit | `dc0d0817622435ea46b33575fd4f84d3959dc42d` |
+| Files | `lib/sqlalchemy/orm/bulk_persistence.py`, `lib/sqlalchemy/sql/crud.py`, `lib/sqlalchemy/sql/selectable.py` |
+| Bug type | ORM/compiler (UPDATE resolves wrong columns from multi-entity statement) |
+| Complexity | High — multi-layer fix spanning ORM, SQL compiler, and selectable abstraction |
+
 ## Held-Out Set (3 bugs)
 
 The reviewer agent NEVER sees these. Used only to validate that instruction improvements generalize.
 
-### 6. textual-selection-disappearing
+### 7. textual-selection-disappearing
 
 | Field | Value |
 |-------|-------|
@@ -93,7 +104,7 @@ The reviewer agent NEVER sees these. Used only to validate that instruction impr
 | Bug type | UI state (selection disappears on interaction) |
 | Complexity | Medium — state management fix |
 
-### 7. aiohttp-zstd-multiframe
+### 8. aiohttp-zstd-multiframe
 
 | Field | Value |
 |-------|-------|
@@ -105,7 +116,7 @@ The reviewer agent NEVER sees these. Used only to validate that instruction impr
 | Bug type | Streaming (zstd decompression fails on multi-frame responses) |
 | Complexity | Medium — compression pipeline fix |
 
-### 8. httpcore-keepalive
+### 9. httpcore-keepalive
 
 | Field | Value |
 |-------|-------|
@@ -125,6 +136,7 @@ The reviewer agent NEVER sees these. Used only to validate that instruction impr
 | Validation | 2 | email IDN, unreachable warning |
 | Protocol/format | 2 | chunked upload, bearer whitespace |
 | Streaming/data | 1 | zstd multi-frame |
+| ORM/compiler | 1 | wrong column resolution in multi-entity UPDATE |
 
 ## Workspace Setup Pattern
 
