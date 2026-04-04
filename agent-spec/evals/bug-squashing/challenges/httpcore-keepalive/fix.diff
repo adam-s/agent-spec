@@ -1,0 +1,161 @@
+commit 10a658221deb38a4c5b16db55ab554b0bf731707
+Author: Krzysztof Błażewicz <blazewicz.krzysztof@gmail.com>
+Date:   Mon Oct 13 14:41:26 2025 +0200
+
+    Fix max_keepalive_connections (#1000)
+    
+    This commit fixes a bug in both sync and async connection pools
+    where idle connections were dropped from the pool even when
+    max_keepalive_connections limit has not been reached. This
+    happened because the check compared this number to the total
+    number of connections, not only the idle ones.
+
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index b43d7f0..5761a3c 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
+ 
+ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+ 
++## Unreleased
++
++- Fix `max_keepalive_connections` not being properly handled. (#1000)
++
+ ## Version 1.0.9 (April 24th, 2025)
+ 
+ - Resolve https://github.com/advisories/GHSA-vqfr-h8mv-ghfj with h11 dependency update. (#1008)
+diff --git a/httpcore/_async/connection_pool.py b/httpcore/_async/connection_pool.py
+index 96e973d..5ef74e6 100644
+--- a/httpcore/_async/connection_pool.py
++++ b/httpcore/_async/connection_pool.py
+@@ -291,7 +291,7 @@ class AsyncConnectionPool(AsyncRequestInterface):
+                 closing_connections.append(connection)
+             elif (
+                 connection.is_idle()
+-                and len([connection.is_idle() for connection in self._connections])
++                and sum(connection.is_idle() for connection in self._connections)
+                 > self._max_keepalive_connections
+             ):
+                 # log: "closing idle connection"
+diff --git a/httpcore/_sync/connection_pool.py b/httpcore/_sync/connection_pool.py
+index 9ccfa53..4b26f9c 100644
+--- a/httpcore/_sync/connection_pool.py
++++ b/httpcore/_sync/connection_pool.py
+@@ -291,7 +291,7 @@ class ConnectionPool(RequestInterface):
+                 closing_connections.append(connection)
+             elif (
+                 connection.is_idle()
+-                and len([connection.is_idle() for connection in self._connections])
++                and sum(connection.is_idle() for connection in self._connections)
+                 > self._max_keepalive_connections
+             ):
+                 # log: "closing idle connection"
+diff --git a/tests/_async/test_connection_pool.py b/tests/_async/test_connection_pool.py
+index 2fc2720..bc4b251 100644
+--- a/tests/_async/test_connection_pool.py
++++ b/tests/_async/test_connection_pool.py
+@@ -30,7 +30,7 @@ async def test_connection_pool_with_keepalive():
+     )
+ 
+     async with httpcore.AsyncConnectionPool(
+-        network_backend=network_backend,
++        network_backend=network_backend, max_keepalive_connections=1
+     ) as pool:
+         # Sending an intial request, which once complete will return to the pool, IDLE.
+         async with pool.stream("GET", "https://example.com/") as response:
+@@ -79,28 +79,33 @@ async def test_connection_pool_with_keepalive():
+         )
+ 
+         # Sending a request to a different origin will not reuse the existing IDLE connection.
+-        async with pool.stream("GET", "http://example.com/") as response:
++        async with pool.stream("GET", "http://example.com/") as response_1, pool.stream(
++            "GET", "http://example.com/"
++        ) as response_2:
+             info = [repr(c) for c in pool.connections]
+             assert info == [
+                 "<AsyncHTTPConnection ['https://example.com:443', HTTP/1.1, IDLE, Request Count: 2]>",
+                 "<AsyncHTTPConnection ['http://example.com:80', HTTP/1.1, ACTIVE, Request Count: 1]>",
++                "<AsyncHTTPConnection ['http://example.com:80', HTTP/1.1, ACTIVE, Request Count: 1]>",
+             ]
+             assert (
+                 repr(pool)
+-                == "<AsyncConnectionPool [Requests: 1 active, 0 queued | Connections: 1 active, 1 idle]>"
++                == "<AsyncConnectionPool [Requests: 2 active, 0 queued | Connections: 2 active, 1 idle]>"
+             )
+-            await response.aread()
++            await response_1.aread()
++            await response_2.aread()
+ 
+-        assert response.status == 200
+-        assert response.content == b"Hello, world!"
++        assert response_1.status == 200
++        assert response_1.content == b"Hello, world!"
++        assert response_2.status == 200
++        assert response_2.content == b"Hello, world!"
+         info = [repr(c) for c in pool.connections]
+         assert info == [
+-            "<AsyncHTTPConnection ['https://example.com:443', HTTP/1.1, IDLE, Request Count: 2]>",
+             "<AsyncHTTPConnection ['http://example.com:80', HTTP/1.1, IDLE, Request Count: 1]>",
+         ]
+         assert (
+             repr(pool)
+-            == "<AsyncConnectionPool [Requests: 0 active, 0 queued | Connections: 0 active, 2 idle]>"
++            == "<AsyncConnectionPool [Requests: 0 active, 0 queued | Connections: 0 active, 1 idle]>"
+         )
+ 
+ 
+diff --git a/tests/_sync/test_connection_pool.py b/tests/_sync/test_connection_pool.py
+index ee303e5..7adc3f5 100644
+--- a/tests/_sync/test_connection_pool.py
++++ b/tests/_sync/test_connection_pool.py
+@@ -30,7 +30,7 @@ def test_connection_pool_with_keepalive():
+     )
+ 
+     with httpcore.ConnectionPool(
+-        network_backend=network_backend,
++        network_backend=network_backend, max_keepalive_connections=1
+     ) as pool:
+         # Sending an intial request, which once complete will return to the pool, IDLE.
+         with pool.stream("GET", "https://example.com/") as response:
+@@ -79,28 +79,33 @@ def test_connection_pool_with_keepalive():
+         )
+ 
+         # Sending a request to a different origin will not reuse the existing IDLE connection.
+-        with pool.stream("GET", "http://example.com/") as response:
++        with pool.stream("GET", "http://example.com/") as response_1, pool.stream(
++            "GET", "http://example.com/"
++        ) as response_2:
+             info = [repr(c) for c in pool.connections]
+             assert info == [
+                 "<HTTPConnection ['https://example.com:443', HTTP/1.1, IDLE, Request Count: 2]>",
+                 "<HTTPConnection ['http://example.com:80', HTTP/1.1, ACTIVE, Request Count: 1]>",
++                "<HTTPConnection ['http://example.com:80', HTTP/1.1, ACTIVE, Request Count: 1]>",
+             ]
+             assert (
+                 repr(pool)
+-                == "<ConnectionPool [Requests: 1 active, 0 queued | Connections: 1 active, 1 idle]>"
++                == "<ConnectionPool [Requests: 2 active, 0 queued | Connections: 2 active, 1 idle]>"
+             )
+-            response.read()
++            response_1.read()
++            response_2.read()
+ 
+-        assert response.status == 200
+-        assert response.content == b"Hello, world!"
++        assert response_1.status == 200
++        assert response_1.content == b"Hello, world!"
++        assert response_2.status == 200
++        assert response_2.content == b"Hello, world!"
+         info = [repr(c) for c in pool.connections]
+         assert info == [
+-            "<HTTPConnection ['https://example.com:443', HTTP/1.1, IDLE, Request Count: 2]>",
+             "<HTTPConnection ['http://example.com:80', HTTP/1.1, IDLE, Request Count: 1]>",
+         ]
+         assert (
+             repr(pool)
+-            == "<ConnectionPool [Requests: 0 active, 0 queued | Connections: 0 active, 2 idle]>"
++            == "<ConnectionPool [Requests: 0 active, 0 queued | Connections: 0 active, 1 idle]>"
+         )
+ 
+ 

@@ -126,10 +126,25 @@ RECURSE:
 
      Do NOT skip this step. Diagnosis without observation leads to wrong fixes.
 
+  8.5 REVIEW (when known-good fix exists)
+      If the challenge has a fix.diff file, launch the reviewer agent:
+
+        Agent(reviewer, "Review run {run_id}:
+          results_dir=evals/{eval}/results/{run_id}
+          fix_diff=evals/{eval}/challenges/{challenge}/fix.diff
+          prompt=evals/{eval}/challenges/{challenge}/prompt.md")
+
+      The reviewer compares the agent's approach to the known-good fix and
+      classifies the debugging failure pattern. Its JSON output feeds directly
+      into the findings table in step 9.
+
+      If no fix.diff exists, skip this step and diagnose manually from observation.
+
   9. DIAGNOSE (gate: findings table required)
      Produce a findings table with one row per failure. Every row MUST have:
        | Instance | What failed | Evidence (file:line or event) | Fix | Level (0 or 2) |
      A row without evidence in the "Evidence" column is not diagnosed — go back to OBSERVE.
+     If a reviewer report exists, use its output to populate the table.
      If uncertain about Level classification, ask the human.
 
      EMIT: apc_log("INFO", "iteration_diagnosed", "Diagnosis complete",

@@ -1,0 +1,70 @@
+commit b423717da81aaf8117313b4b377efaa6413a9639
+Author: Varun Chawla <34209028+veeceey@users.noreply.github.com>
+Date:   Thu Feb 19 07:24:45 2026 -0800
+
+    Fix humanize reporting "a month" for 16-day differences (#1240) (#1242)
+    
+    The humanize method incorrectly reported differences of ~15-30 days
+    within the same calendar month as "a month" instead of weeks. This
+    was caused by two issues:
+    
+    1. The `calendar_diff.days > 14` rounding unconditionally added a
+       month even when no calendar month boundary had been crossed
+       (calendar_months was 0). Now this rounding only applies when
+       at least one calendar month has already elapsed.
+    
+    2. The weeks/week check came after the months check, so it was
+       unreachable for within-month differences that got incorrectly
+       promoted. The weeks checks now come before months, guarded by
+       `calendar_months < 1` so that true calendar month differences
+       (e.g., Feb 8 to Mar 8 = 28 days) still correctly show as
+       "a month".
+    
+    Co-authored-by: Claude Opus 4.6 <noreply@anthropic.com>
+    Co-authored-by: Kristijan "Fremen" Velkovski <me@krisfremen.com>
+
+diff --git a/arrow/arrow.py b/arrow/arrow.py
+index eecf232..f0a57f0 100644
+--- a/arrow/arrow.py
++++ b/arrow/arrow.py
+@@ -1223,8 +1223,10 @@ class Arrow:
+                     calendar_diff.years * self._MONTHS_PER_YEAR + calendar_diff.months
+                 )
+ 
+-                # For months, if more than 2 weeks, count as a full month
+-                if calendar_diff.days > 14:
++                # Round up partial months when already at least one
++                # calendar month has elapsed and the remaining days
++                # are more than halfway through another month.
++                if calendar_months >= 1 and calendar_diff.days > 14:
+                     calendar_months += 1
+ 
+                 calendar_months = min(calendar_months, self._MONTHS_PER_YEAR)
+@@ -1236,6 +1238,13 @@ class Arrow:
+                     days = sign * max(delta_second // self._SECS_PER_DAY, 2)
+                     return locale.describe("days", days, only_distance=only_distance)
+ 
++                elif diff < self._SECS_PER_WEEK * 2 and calendar_months < 1:
++                    return locale.describe("week", sign, only_distance=only_distance)
++
++                elif calendar_months < 1 and diff < self._SECS_PER_MONTH:
++                    weeks = sign * max(delta_second // self._SECS_PER_WEEK, 2)
++                    return locale.describe("weeks", weeks, only_distance=only_distance)
++
+                 elif calendar_months >= 1 and diff < self._SECS_PER_YEAR:
+                     if calendar_months == 1:
+                         return locale.describe(
+@@ -1247,13 +1256,6 @@ class Arrow:
+                             "months", months, only_distance=only_distance
+                         )
+ 
+-                elif diff < self._SECS_PER_WEEK * 2:
+-                    return locale.describe("week", sign, only_distance=only_distance)
+-
+-                elif diff < self._SECS_PER_MONTH:
+-                    weeks = sign * max(delta_second // self._SECS_PER_WEEK, 2)
+-                    return locale.describe("weeks", weeks, only_distance=only_distance)
+-
+                 elif diff < self._SECS_PER_YEAR * 2:
+                     return locale.describe("year", sign, only_distance=only_distance)
+ 

@@ -1,0 +1,9 @@
+commit 7338cb9dafd0d0e916585f191ae505b3e602bb51
+Merge: 27701029 905b397d
+Author: Will McGugan <willmcgugan@gmail.com>
+Date:   Thu Feb 19 17:04:17 2026 +0000
+
+    Merge pull request #4006 from Textualize/fix-grapheme-stuck
+    
+    fix for infinite loop in split_graphemes
+

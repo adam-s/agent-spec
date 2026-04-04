@@ -1,0 +1,160 @@
+commit b2e20b2d4e6ee92b7f46bbad73a5a9a7abe18b28
+Author: jonathan343 <43360731+jonathan343@users.noreply.github.com>
+Date:   Thu Mar 19 23:43:36 2026 -0400
+
+    Fix aws-chunked Content-Length handling for non-seekable S3 uploads (#3652)
+
+diff --git a/.changes/next-release/bugfix-s3-17308.json b/.changes/next-release/bugfix-s3-17308.json
+new file mode 100644
+index 000000000..f831c5db5
+--- /dev/null
++++ b/.changes/next-release/bugfix-s3-17308.json
+@@ -0,0 +1,5 @@
++{
++  "type": "bugfix",
++  "category": "s3",
++  "description": "Fix aws-chunked requests with non-seekable streams sending both ``Content-Length`` and ``Transfer-Encoding: chunked``, which violated HTTP/1.1 (RFC 7230) and caused ``SignatureDoesNotMatch`` errors."
++}
+diff --git a/botocore/httpchecksum.py b/botocore/httpchecksum.py
+index 6bd579519..bf4616f86 100644
+--- a/botocore/httpchecksum.py
++++ b/botocore/httpchecksum.py
+@@ -472,16 +472,22 @@ def _apply_request_trailer_checksum(request):
+     headers["X-Amz-Trailer"] = location_name
+ 
+     content_length = determine_content_length(body)
++    if content_length is None and "Content-Length" in headers:
++        # determine_content_length() cannot resolve the length of non-seekable
++        # bodies, but the caller may have set Content-Length explicitly. Reuse
++        # that value for X-Amz-Decoded-Content-Length before the header is
++        # removed for chunked transfer encoding.
++        content_length = int(headers["Content-Length"])
+     if content_length is not None:
+         # Send the decoded content length if we can determine it. Some
+         # services such as S3 may require the decoded content length
+         headers["X-Amz-Decoded-Content-Length"] = str(content_length)
+ 
+-        if "Content-Length" in headers:
+-            del headers["Content-Length"]
+-            logger.debug(
+-                "Removing the Content-Length header since 'chunked' is specified for Transfer-Encoding."
+-            )
++    if "Content-Length" in headers:
++        del headers["Content-Length"]
++        logger.debug(
++            "Removing the Content-Length header since 'chunked' is specified for Transfer-Encoding."
++        )
+ 
+     if isinstance(body, (bytes, bytearray)):
+         body = io.BytesIO(body)
+diff --git a/tests/functional/test_s3.py b/tests/functional/test_s3.py
+index 73ac81f94..edc2fcd43 100644
+--- a/tests/functional/test_s3.py
++++ b/tests/functional/test_s3.py
+@@ -11,6 +11,7 @@
+ # ANY KIND, either express or implied. See the License for the specific
+ # language governing permissions and limitations under the License.
+ import datetime
++import io
+ import re
+ 
+ import pytest
+@@ -43,6 +44,22 @@ from tests import (
+ DATE = datetime.datetime(2021, 8, 27, 0, 0, 0, tzinfo=datetime.timezone.utc)
+ 
+ 
++class NonSeekableStream(io.RawIOBase):
++    def __init__(self, data):
++        self._data = data
++        self._pos = 0
++
++    def read(self, size=-1):
++        if size == -1:
++            size = len(self._data) - self._pos
++        chunk = self._data[self._pos : self._pos + size]
++        self._pos += len(chunk)
++        return chunk
++
++    def readable(self):
++        return True
++
++
+ class TestS3BucketValidation(unittest.TestCase):
+     def test_invalid_bucket_name_raises_error(self):
+         session = botocore.session.get_session()
+@@ -1550,6 +1567,27 @@ class TestS3SigV4(BaseS3OperationTest):
+         self.assertIn(b"x-amz-checksum-crc32:eCQEmA==", body)
+         self.assertNotIn("Content-Length", sent_headers)
+ 
++    def test_trailing_checksum_non_seekable_body_uses_content_length(self):
++        with self.http_stubber:
++            self.client.put_object(
++                Bucket="foo",
++                Key="bar",
++                Body=NonSeekableStream(b"hello world"),
++                ContentLength=11,
++            )
++        sent_headers = self.get_sent_headers()
++        self.assertEqual(sent_headers["Content-Encoding"], b"aws-chunked")
++        self.assertEqual(sent_headers["Transfer-Encoding"], b"chunked")
++        self.assertEqual(
++            sent_headers["X-Amz-Trailer"], b"x-amz-checksum-crc32"
++        )
++        self.assertEqual(sent_headers["X-Amz-Decoded-Content-Length"], b"11")
++        self.assertEqual(
++            sent_headers["x-amz-content-sha256"],
++            b"STREAMING-UNSIGNED-PAYLOAD-TRAILER",
++        )
++        self.assertNotIn("Content-Length", sent_headers)
++
+     def test_trailing_checksum_set_empty_body(self):
+         with self.http_stubber:
+             self.client.put_object(Bucket="foo", Key="bar", Body="")
+diff --git a/tests/unit/test_httpchecksum.py b/tests/unit/test_httpchecksum.py
+index 8277e7c2a..e1ce729b7 100644
+--- a/tests/unit/test_httpchecksum.py
++++ b/tests/unit/test_httpchecksum.py
+@@ -10,6 +10,7 @@
+ # distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF
+ # ANY KIND, either express or implied. See the License for the specific
+ # language governing permissions and limitations under the License.
++import io
+ import unittest
+ from io import BytesIO
+ 
+@@ -377,6 +378,35 @@ class TestHttpChecksumHandlers(unittest.TestCase):
+         self.assertNotIn("x-amz-checksum-crc32", request["headers"])
+         self.assertIsInstance(request["body"], AwsChunkedWrapper)
+ 
++    def test_apply_request_checksum_flex_trailer_non_seekable_with_length(
++        self,
++    ):
++        class NonSeekableStream(io.RawIOBase):
++            def __init__(self, body):
++                self._body = BytesIO(body)
++
++            def read(self, size=-1):
++                return self._body.read(size)
++
++            def readable(self):
++                return True
++
++        request = self._build_request(NonSeekableStream(b"hello world"))
++        request["headers"]["Content-Length"] = "11"
++        request["context"]["checksum"] = {
++            "request_algorithm": {
++                "in": "trailer",
++                "algorithm": "crc32",
++                "name": "x-amz-checksum-crc32",
++            }
++        }
++        apply_request_checksum(request)
++        self.assertNotIn("Content-Length", request["headers"])
++        self.assertEqual(
++            request["headers"]["X-Amz-Decoded-Content-Length"], "11"
++        )
++        self.assertIsInstance(request["body"], AwsChunkedWrapper)
++
+     def test_apply_request_checksum_flex_header_trailer_explicit_digest(self):
+         request = self._build_request(b"")
+         request["context"]["checksum"] = {

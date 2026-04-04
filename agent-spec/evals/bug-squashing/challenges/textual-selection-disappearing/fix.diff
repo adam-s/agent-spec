@@ -1,0 +1,181 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 9dff90f..3a82cce 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
+ The format is based on [Keep a Changelog](http://keepachangelog.com/)
+ and this project adheres to [Semantic Versioning](http://semver.org/).
+ 
++
++## [8.2.1] - 2026-03-29
++
++### Fixed
++
++- Fix crash when a widget disapears between selections https://github.com/Textualize/textual/pull/6455
++
+ ## [8.2.0] - 2026-03-27
+ 
+ ### Added 
+@@ -3395,6 +3402,8 @@ https://textual.textualize.io/blog/2022/11/08/version-040/#version-040
+ - New handler system for messages that doesn't require inheritance
+ - Improved traceback handling
+ 
++[8.2.1]: https://github.com/Textualize/textual/compare/v8.2.0...v8.2.1
++[8.2.0]: https://github.com/Textualize/textual/compare/v8.1.1...v8.2.0
+ [8.1.1]: https://github.com/Textualize/textual/compare/v8.1.0...v8.1.1
+ [8.1.0]: https://github.com/Textualize/textual/compare/v8.0.2...v8.1.0
+ [8.0.2]: https://github.com/Textualize/textual/compare/v8.0.1...v8.0.2
+diff --git a/pyproject.toml b/pyproject.toml
+index 7c6477d..b1df604 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -1,6 +1,6 @@
+ [tool.poetry]
+ name = "textual"
+-version = "8.2.0"
++version = "8.2.1"
+ homepage = "https://github.com/Textualize/textual"
+ repository = "https://github.com/Textualize/textual"
+ documentation = "https://textual.textualize.io/"
+diff --git a/src/textual/screen.py b/src/textual/screen.py
+index e4d796d..405b066 100644
+--- a/src/textual/screen.py
++++ b/src/textual/screen.py
+@@ -973,8 +973,12 @@ class Screen(Generic[ScreenResultType], Widget):
+ 
+         widget_text: list[str] = []
+         for widget, selection in self.selections.items():
+-            selected_text_in_widget = widget.get_selection(selection)
+-            if selected_text_in_widget is not None:
++            # Filter out widgets that may have been removed since the text was selected
++            if (
++                widget.is_attached
++                and (selected_text_in_widget := widget.get_selection(selection))
++                is not None
++            ):
+                 widget_text.extend(selected_text_in_widget)
+ 
+         selected_text = "".join(widget_text).rstrip("\n")
+@@ -2021,6 +2025,10 @@ class Screen(Generic[ScreenResultType], Widget):
+         start_widget, screen_start, start_offset = self._select_start
+         end_widget, screen_end, end_offset = select_end
+ 
++        if not start_widget.is_attached or not end_widget.is_attached:
++            # Widgets may have been removed since selection started
++            return
++
+         if start_widget is end_widget:
+             # Simplest case, selection starts and ends on the same widget
+             if end_offset.transpose < start_offset.transpose:
+@@ -2049,7 +2057,9 @@ class Screen(Generic[ScreenResultType], Widget):
+             start_widget, end_widget = end_widget, start_widget
+ 
+         # Get a widget which contains both widgets
+-        container_widget = Widget.get_common_ancestor(start_widget, end_widget)
++        container_widget = Widget.get_common_ancestor(
++            start_widget, end_widget, default=self
++        )
+ 
+         # Get a selection bounds shape
+         selection_bounds = Shape.selection_bounds(
+diff --git a/src/textual/widget.py b/src/textual/widget.py
+index b7b08c4..ab52d03 100644
+--- a/src/textual/widget.py
++++ b/src/textual/widget.py
+@@ -690,15 +690,18 @@ class Widget(DOMNode):
+         return self.screen.selections.get(self, None)
+ 
+     @classmethod
+-    def get_common_ancestor(cls, widget1: Widget, widget2: Widget) -> Widget:
++    def get_common_ancestor(
++        cls, widget1: Widget, widget2: Widget, *, default: Widget | None = None
++    ) -> Widget:
+         """Get a common ancestors to both widgets.
+ 
+         Raises:
+-            ValueError: If there is not common ancestor (will not occur if both widgets are attached to the same DOM).
++            ValueError: If there is no common ancestor and `default` is not provided (will not occur if both widgets are attached to the same DOM).
+ 
+         Args:
+             widget1: A Widget.
+             widget2: A second widgets.
++            default: A widget to return if no common ancestor is found.
+ 
+         Returns:
+             A common ancestor widgets.
+@@ -709,6 +712,8 @@ class Widget(DOMNode):
+             if node in ancestors2:
+                 assert isinstance(node, Widget)
+                 return node
++        if default is not None:
++            return default
+         raise ValueError("No common ancestor found")
+ 
+     def focus_on_click(self) -> bool:
+diff --git a/tests/test_widget.py b/tests/test_widget.py
+index ee32789..1ce6dfe 100644
+--- a/tests/test_widget.py
++++ b/tests/test_widget.py
+@@ -23,6 +23,7 @@ from textual.widgets import (
+     Log,
+     OptionList,
+     RichLog,
++    Static,
+     Switch,
+     TextArea,
+ )
+@@ -714,5 +715,54 @@ async def test_get_common_ancestor():
+         label1 = app.query_one("#label1")
+         label2 = app.query_one("#label2")
+         label3 = app.query_one("#label3")
++
++        # Successful operations
+         assert Widget.get_common_ancestor(label2, label3).id == "v4"
+         assert Widget.get_common_ancestor(label2, label1).id == "v1"
++
++        with pytest.raises(ValueError):
++            # No common ancestor, throws a Value Error
++            Widget.get_common_ancestor(label1, Label("unattached"))
++
++        # No common ancestor with default
++        assert (
++            Widget.get_common_ancestor(label1, Label("unattached"), default=app.screen)
++            is app.screen
++        )
++
++
++async def test_select_remove():
++    """Test selecting text after a widget is removed.
++
++    Regression test for https://github.com/Textualize/textual/issues/6452
++
++    """
++
++    top_text = "Hello, World " * 20
++    vanish_text = "This will vanish " * 10
++
++    class SelApp(App):
++
++        BINDINGS = [("space", "vanish")]
++
++        def compose(self) -> ComposeResult:
++            yield Static(top_text)
++            yield Static(vanish_text, id="vanish")
++
++        def action_vanish(self) -> None:
++            self.query_one("#vanish").remove()
++
++    app = SelApp()
++    # Simulate mouse down, move to second widget, remove second widget, move mouse, mouse up
++    # Prior to the fix this would result in an error as the second widget was no longer attached
++    # Post fix, there should be no error, and the selected text should be from the first widget.
++    async with app.run_test() as pilot:
++        await pilot.mouse_down(offset=(5, 2))
++        await pilot.hover(offset=(20, 5))
++        await app.query_one("#vanish").remove()
++        await pilot.hover(offset=(25, 6))
++        await pilot.mouse_up(offset=(30, 5))
++        selected_text = app.screen.get_selected_text()
++        expected = ", World Hello, World Hello, World Hello, World Hello, World Hello, World Hello, World Hello, World "
++        print(repr(selected_text))
++        assert selected_text == expected

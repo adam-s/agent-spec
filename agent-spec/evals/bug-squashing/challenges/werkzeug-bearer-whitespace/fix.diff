@@ -1,0 +1,7 @@
+commit dafe7f1e37cf78cc7f11a9706c62a23e0dba9010
+Merge: 795f4eaf 051fd663
+Author: David Lord <davidism@gmail.com>
+Date:   Mon Mar 23 09:44:30 2026 -0700
+
+    fix trailing whitespace in WWW-Authenticate bearer (#3129)
+
