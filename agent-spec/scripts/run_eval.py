@@ -8,6 +8,7 @@ Usage:
 
 import argparse
 import concurrent.futures
+import json
 import os
 import re
 import subprocess
@@ -95,7 +96,22 @@ def run_single(eval_dir, config_dir, cfg, args, challenge_name=None, challenge_d
     if getattr(args, "stream", False):
         invoke_args.append("--stream")
 
-    return subprocess.run(invoke_args).returncode
+    result = subprocess.run(invoke_args, capture_output=False)
+
+    # Check PASS/FAIL from the most recent results dir
+    results_root = eval_dir / "results"
+    if results_root.is_dir():
+        latest = max(results_root.iterdir(), key=lambda d: d.stat().st_mtime, default=None)
+        if latest and (latest / "events.jsonl").exists():
+            for line in (latest / "events.jsonl").read_text().splitlines():
+                try:
+                    ev = json.loads(line)
+                    if ev.get("event") == "score":
+                        return ("PASS" if ev["data"]["result"] == "PASS" else "FAIL", result.returncode)
+                except (json.JSONDecodeError, KeyError):
+                    pass
+
+    return ("UNKNOWN", result.returncode)
 
 
 def main(args=None):
@@ -112,6 +128,8 @@ def main(args=None):
                         help="Use prompt-VARIANT.md instead of prompt.md (e.g. --prompt-variant vague)")
     parser.add_argument("--parallel", type=int, default=1, metavar="N",
                         help="Max challenges to run concurrently (default: 1 = sequential)")
+    parser.add_argument("--escalate", action="store_true",
+                        help="On FAIL, retry with sonnet (prefers haiku, escalates on failure)")
     args = args or parser.parse_args()
 
     eval_dir = PROJECT_DIR / "evals" / args.eval
@@ -145,6 +163,8 @@ def main(args=None):
                 die(f"Challenge '{args.challenge}' not found. Available: {', '.join(challenges)}")
             challenges = [args.challenge]
 
+        escalate_model = "claude-sonnet-4-6"
+
         if args.parallel > 1 and len(challenges) > 1:
             max_workers = min(args.parallel, len(challenges))
             print(f"  Running {len(challenges)} challenges ({max_workers} concurrent)", file=sys.stderr)
@@ -156,18 +176,34 @@ def main(args=None):
                 }
                 for future in concurrent.futures.as_completed(futures):
                     ch = futures[future]
-                    rc = future.result()
-                    if rc != 0:
-                        print(f"  Challenge '{ch}' failed (exit {rc})", file=sys.stderr)
+                    verdict, rc = future.result()
+                    if verdict == "FAIL" and args.escalate:
+                        print(f"  ↑ {ch}: FAIL with {args.model or cfg.get('model', 'default')} — escalating to {escalate_model}", file=sys.stderr)
+                        saved_model = args.model
+                        args.model = escalate_model
+                        run_single(eval_dir, config_dir, cfg, args,
+                                   challenge_name=ch, challenge_dir=challenges_dir / ch)
+                        args.model = saved_model
         else:
             for ch in challenges:
-                run_single(eval_dir, config_dir, cfg, args,
-                           challenge_name=ch, challenge_dir=challenges_dir / ch)
+                verdict, rc = run_single(eval_dir, config_dir, cfg, args,
+                                         challenge_name=ch, challenge_dir=challenges_dir / ch)
+                if verdict == "FAIL" and args.escalate:
+                    print(f"  ↑ {ch}: FAIL with {args.model or cfg.get('model', 'default')} — escalating to {escalate_model}", file=sys.stderr)
+                    saved_model = args.model
+                    args.model = escalate_model
+                    run_single(eval_dir, config_dir, cfg, args,
+                               challenge_name=ch, challenge_dir=challenges_dir / ch)
+                    args.model = saved_model
     else:
         # Single-challenge eval
         if not cfg.get("source"):
             die("Single-challenge eval requires 'source' in EVAL.md")
-        run_single(eval_dir, config_dir, cfg, args)
+        verdict, rc = run_single(eval_dir, config_dir, cfg, args)
+        if verdict == "FAIL" and args.escalate:
+            print(f"  ↑ FAIL — escalating to {escalate_model}", file=sys.stderr)
+            args.model = escalate_model
+            run_single(eval_dir, config_dir, cfg, args)
 
 
 if __name__ == "__main__":

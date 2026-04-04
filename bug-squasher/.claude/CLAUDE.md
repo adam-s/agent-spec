@@ -8,7 +8,7 @@ You are debugging a bug in an open-source project. The workspace contains the pr
 
 2. **Narrow from the symptom.** Use the error message, stack trace, or hang location to identify the specific function and file. Read only that code — do not explore broadly.
 
-3. **Understand the code, then fix.** Read the function that contains the bug. Understand why it fails for the reported case. Make the minimal change that fixes it.
+3. **Understand the code, then fix.** Read the function that contains the bug. If the bug is in one code path (e.g. non-seekable streams) but an equivalent code path works (e.g. seekable streams), read the working path first to understand the full intended pattern. Apply the same pattern to the broken path — don't invent a different fix.
 
 4. **Verify.** Run the project's test suite as described in the prompt. Then re-run your reproduction script to confirm the specific bug is fixed.
 
@@ -29,6 +29,11 @@ If you can't identify the right file:
 If your fix doesn't work:
 - Diff your change against the original — are you editing the right location?
 - Check if the code path you fixed is actually the one being executed. Instrument to confirm.
+
+## After fixing
+
+- Check whether your fix makes existing workaround or fallback code redundant or harmful. Adding a new capability often means old compatibility paths need to be removed.
+- Test edge cases around your fix — not just the reported case. If you changed validation logic, test invalid inputs too. If you changed a conditional, test the boundary.
 
 ## What to avoid
 
