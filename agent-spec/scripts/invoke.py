@@ -485,6 +485,7 @@ def main():
     # ── Phase 5: METRICS ─────────────────────────────────────────
     output_file = _run_dir / "output.json"
     final_cost = 0.0
+    final_tokens = 0
     if output_file.exists() and output_file.stat().st_size > 0:
         tokens = parse_output_json(output_file)
         if tokens:
@@ -493,6 +494,8 @@ def main():
             emit("METRIC", "token_update", "Token usage", tokens)
             render_event({"event": "token_update", "data": tokens}, status=status)
             final_cost = tokens.get("cost_usd", final_cost)
+            final_tokens = (tokens.get("input", 0) + tokens.get("output", 0)
+                            + tokens.get("cache_create", 0) + tokens.get("cache_read", 0))
     elif timed_out:
         emit("METRIC", "token_update", "Token usage (unavailable after timeout)",
              {"input": 0, "output": 0, "cost_usd": 0, "note": "timeout_no_output"})
@@ -544,7 +547,7 @@ def main():
     # ── Final: run_finished (the terminal event) ─────────────────
     finished_data = {
         "run_id": run_id, "target": target_name, "config": config_name,
-        "result": result_str, "cost_usd": final_cost,
+        "result": result_str, "total_tokens": final_tokens, "cost_usd": final_cost,
         "duration_s": duration_ms / 1000,
     }
     emit("INFO", "run_finished", "Run complete", finished_data)

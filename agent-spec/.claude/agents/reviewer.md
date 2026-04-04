@@ -97,7 +97,7 @@ Emit this JSON block, then a brief narrative summary:
   "run_id": "...",
   "challenge": "...",
   "passed": true or false,
-  "cost_usd": 0.00,
+  "total_tokens": 0,
   "turns": 0,
   "primary_pattern": "P1",
   "secondary_patterns": [],

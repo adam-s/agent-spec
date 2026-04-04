@@ -507,13 +507,17 @@ class StatusLine:
                 print("  ".join(parts), file=sys.stderr)
 
     def finish(self, result: str, cost: float | None = None,
-               duration_s: float | None = None):
+               duration_s: float | None = None, total_tokens: int | None = None):
         """Print the final result line."""
         if self.finished:
             return
         self.finished = True
         if cost is not None:
             self.cost = cost
+        if total_tokens is not None:
+            self.total_tokens = total_tokens
+        else:
+            self.total_tokens = self.tokens_in + self.tokens_out
         if duration_s is None:
             duration_s = time.time() - self.start
 
@@ -528,8 +532,8 @@ class StatusLine:
             result_str = result
 
         line = f"  {icon} {self.label}: {result_str}  ({duration_s:.0f}s)"
-        if self.cost:
-            line += f"  ${self.cost:.2f}"
+        if self.total_tokens:
+            line += f"  {self.total_tokens:,}tok"
 
         if self._is_tty:
             print(f"\r{line}\033[K", file=sys.stderr)
@@ -613,7 +617,8 @@ def render_event(event: dict, status: StatusLine | None = None, verbose: bool = 
     elif ev == "run_finished" and status:
         status.finish(data.get("result", "?"),
                       cost=data.get("cost_usd"),
-                      duration_s=data.get("duration_s"))
+                      duration_s=data.get("duration_s"),
+                      total_tokens=data.get("total_tokens"))
 
     elif ev == "run_finished" and not status:
         # Fallback when no StatusLine (e.g. non-interactive)

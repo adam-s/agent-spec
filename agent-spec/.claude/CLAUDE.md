@@ -14,7 +14,7 @@ Three testing layers, each adding signal:
 2. **Config testing** — Is the `.claude/` directory well-designed? Score against the component decision tree (@.claude/reference/components/decision-tree.md).
 3. **Behavior testing** — Did the agent make good decisions? Analyze event traces for tool choices, rule adherence, token efficiency.
 
-The primary metric is **cost-to-correctness** — not just pass/fail, but how many tokens it took to get there.
+The primary metric is **tokens-to-correctness** — not just pass/fail, but how many tokens it took to get there. Token counts are model-independent and comparable across pricing changes. Cost is logged but tokens are the headline.
 
 ## Recursive Architecture
 
