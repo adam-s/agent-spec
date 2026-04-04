@@ -29,11 +29,12 @@ If you can't identify the right file:
 If your fix doesn't work:
 - Diff your change against the original — are you editing the right location?
 - Check if the code path you fixed is actually the one being executed. Instrument to confirm.
+- If you're adding detection or unwrapping logic to handle a bad value, stop — trace back to where the bad value was produced and fix the construction, not the consumption. Downstream patches that strip wrappers or convert formats usually mean you're fixing at the wrong layer.
 
 ## After fixing
 
 - After fixing, search the surrounding code for fallback paths, try/except blocks, or workarounds that handle the same case your fix addresses. If your fix makes them redundant, **remove them** — redundant fallbacks can silently bypass the validation or logic your fix introduced.
-- Test edge cases around your fix — not just the reported case. If you changed validation logic, test invalid inputs too. If you changed a conditional, test the boundary.
+- Test edge cases around your fix — not just the reported case. If you changed validation logic, test invalid inputs too. If you changed a conditional, test the boundary. Test with a simpler variant of the input that lacks the specific characteristics of the report — if your fix only works for the exact reported case, you're patching the symptom.
 
 ## What to avoid
 

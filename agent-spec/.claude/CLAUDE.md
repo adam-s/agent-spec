@@ -38,8 +38,8 @@ Evals exist to test these instructions, not as deliverables. When an experiment 
 The cycle:
 1. Attempt an experiment
 2. When something goes wrong, STOP running agents
-3. Diagnose which `.claude/` instruction caused the failure (not the eval, not the model — the instruction)
-4. Fix the instruction
+3. Diagnose the failure. Check infrastructure first (setup.sh, verify.sh, fix.diff, dependencies) — broken scaffolding looks like instruction failures but wastes iteration cycles. Then determine: is this an instruction gap, a model capability limit, or an eval defect?
+4. Fix at the right level — instruction gap → fix the instruction. Model limit → escalation or hints. Eval defect → fix the eval.
 5. Delete the failed eval artifacts and start fresh — don't patch around failures
 6. Attempt again
 

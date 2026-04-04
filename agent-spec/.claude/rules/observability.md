@@ -4,7 +4,8 @@ Every experiment must produce visible, real-time progress. If the developer can'
 
 ## Rules
 
-- Every run must print a summary line when it completes: `✓ name: PASS (30s) $0.05` or `✗ name: FAIL (30s) $0.05`
+- Every run must print a summary line when it completes: `✓ name: PASS (30s) 9,500tok` or `✗ name: FAIL (30s) 9,500tok`
+- Token counts in summary output are **input + output only** — never include cache reads. Cache reads are cheap repetition of context, not actual work. Including them inflates totals ~100x and makes comparisons meaningless.
 - Never pipe agent output through filters that lose data (`tail -1`, `head -1`, `| grep`). Capture the full output, then summarize.
 - After launching a background process, verify it's producing output within 30 seconds. If no output, investigate — don't wait silently.
 - When running multiple sequential runs (loops), each run must print its result before the next starts. The developer should see progress accumulating.

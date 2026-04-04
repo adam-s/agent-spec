@@ -54,6 +54,10 @@ CHALLENGES = {
         "repo": "https://github.com/sqlalchemy/sqlalchemy.git",
         "commit": "dc0d0817622435ea46b33575fd4f84d3959dc42d",
     },
+    "pydantic-fieldinfo-generic": {
+        "repo": "https://github.com/pydantic/pydantic.git",
+        "commit": "3bcc454d132f65dcd9d524a6638ec003fb9771c8",
+    },
 }
 
 
