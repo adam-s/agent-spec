@@ -8,7 +8,7 @@ You are debugging a bug in an open-source project. The workspace contains the pr
 
 2. **Narrow from the symptom.** Use the error message, stack trace, or hang location to identify the specific function and file. Read only that code — do not explore broadly.
 
-3. **Understand the code, then fix.** Read the function that contains the bug. If the bug is in one code path (e.g. non-seekable streams) but an equivalent code path works (e.g. seekable streams), read the working path first to understand the full intended pattern. Apply the same pattern to the broken path — don't invent a different fix.
+3. **Understand the code, then fix.** Read the function that contains the bug. If the bug is in one code path (e.g. non-seekable streams) but an equivalent code path works (e.g. seekable streams), read the working path first to understand the full intended pattern. Apply the same pattern to the broken path — don't invent a different fix. Before implementing, check if the same value is set or consumed through other code paths (e.g., config binding, serialization, eager/async modes) — the same bug often appears in multiple places.
 
 4. **Verify.** Run the project's test suite as described in the prompt. Then re-run your reproduction script to confirm the specific bug is fixed.
 
@@ -38,6 +38,6 @@ If your fix doesn't work:
 
 ## What to avoid
 
-- Do not explore git history to find the answer. The fix must come from understanding the code, not from reading past commits.
+- Do not use `git log`, `git show`, `git blame`, or `git diff` with commit references. The fix must come from understanding the current code, not from reading past commits.
 - Do not read files speculatively. Every file you open should be justified by the reproduction or stack trace.
 - Do not modify test files unless the prompt explicitly says to.

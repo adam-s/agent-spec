@@ -26,15 +26,19 @@ task_stl = dummy.soft_time_limit
 print(f'task.time_limit={task_tl}')
 print(f'task.soft_time_limit={task_stl}')
 
-# Bug 2: eager apply must pack timelimit into request
-result = dummy.apply()
-req_tl = result.request.get('time_limit') or result.request.get('timelimit')
-print(f'request.timelimit={req_tl}')
+# Bug 2: Context.update must unpack timelimit tuple
+from celery.app.task import Context
+ctx = Context()
+ctx.update({'timelimit': (300, 60)})
+ctx_tl = getattr(ctx, 'time_limit', None)
+ctx_stl = getattr(ctx, 'soft_time_limit', None)
+print(f'context.time_limit={ctx_tl}')
+print(f'context.soft_time_limit={ctx_stl}')
 
-if task_tl == 300 and task_stl == 60:
+if task_tl == 300 and task_stl == 60 and ctx_tl == 300 and ctx_stl == 60:
     print('Reproduction checks passed')
 else:
-    print(f'FAILED: task_time_limit={task_tl}, task_soft_time_limit={task_stl}')
+    print(f'FAILED: task=({task_tl},{task_stl}) context=({ctx_tl},{ctx_stl})')
 " 2>&1)
 echo "$OUTPUT"
 
