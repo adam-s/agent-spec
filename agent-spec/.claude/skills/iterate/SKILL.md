@@ -142,10 +142,20 @@ RECURSE:
 
   9. DIAGNOSE (gate: findings table required)
      Produce a findings table with one row per failure. Every row MUST have:
-       | Instance | What failed | Evidence (file:line or event) | Fix | Level (0 or 2) |
+       | Instance | What failed | Evidence (file:line or event) | Fix | Level | Component |
      A row without evidence in the "Evidence" column is not diagnosed — go back to OBSERVE.
      If a reviewer report exists, use its output to populate the table.
      If uncertain about Level classification, ask the human.
+
+     **Component classification:** For each fix, consult @.claude/reference/components/decision-tree.md
+     to determine the right component. Walk the tree from the top:
+       - Is it mechanical (same answer every time)? → Permission or Hook
+       - Does it need enforcement (cannot be ignored)? → settings.json deny rule
+       - Does it need custom logic? → PreToolUse hook
+       - Does it require judgment? → CLAUDE.md, rule, skill, or reference
+     The Component column must name the specific target: `CLAUDE.md`, `rules/<name>.md`,
+     `settings.json (permissions.deny)`, `hook (PreToolUse)`, `skill`, etc.
+     Do not default to CLAUDE.md — let the tree decide.
 
      EMIT: apc_log("INFO", "iteration_diagnosed", "Diagnosis complete",
             {"depth": depth, "session_id": session_id,
@@ -155,12 +165,7 @@ RECURSE:
       Level 2 → target's .claude/
       Level 0 → agent-spec (selective)
       After each fix, consistency-check all .claude/ files at that level.
-
-      **Component escalation:** By default, put Level 2 fixes in CLAUDE.md. If across
-      iterations the same failure repeats despite correct instructions, or CLAUDE.md is
-      growing unwieldy with tangled concerns, consult @.claude/reference/components/decision-tree.md
-      to determine if the fix belongs in a different component (rule, hook, skill,
-      reference doc). This is a diagnosis-driven escalation, not a default.
+      Apply each fix to the component specified in the findings table.
 
       EMIT: apc_log("INFO", "iteration_fixed", "Fixes applied",
              {"depth": depth, "session_id": session_id,
