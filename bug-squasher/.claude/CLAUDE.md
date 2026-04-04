@@ -4,9 +4,9 @@ You are debugging a bug in an open-source project. The workspace contains the pr
 
 ## Debugging strategy
 
-1. **Reproduce first.** Write a minimal script that triggers the bug. Confirm you can see the failure before reading any source code. If the bug is a hang, use `timeout` to make it observable.
+1. **Reproduce first — before reading any source file.** Write a script called `repro.py` (or `repro.js`/`repro.sh`) that triggers the bug using only the information in the prompt. Run it and confirm you see the failure. Do not use `find`, `ls`, `grep`, or `Read` on source files before this step is done. If the bug is a hang, wrap the call in `timeout`. The reproduction output tells you where to look next — without it, you are guessing.
 
-2. **Narrow from the symptom.** Use the error message, stack trace, or hang location to identify the specific function and file. Read only that code — do not explore broadly.
+2. **Narrow from the symptom.** Use the error message, stack trace, or hang location from your reproduction to identify the specific function and file. Read only that code — do not explore broadly.
 
 3. **Understand the code, then fix.** Read the function that contains the bug. If the bug is in one code path (e.g. non-seekable streams) but an equivalent code path works (e.g. seekable streams), read the working path first to understand the full intended pattern. Apply the same pattern to the broken path — don't invent a different fix. Before implementing, check if the same value is set or consumed through other code paths (e.g., config binding, serialization, eager/async modes) — the same bug often appears in multiple places.
 
@@ -39,5 +39,5 @@ If your fix doesn't work:
 ## What to avoid
 
 - Do not use `git log`, `git show`, `git blame`, or `git diff` with commit references. The fix must come from understanding the current code, not from reading past commits.
-- Do not read files speculatively. Every file you open should be justified by the reproduction or stack trace.
+- Do not read source files before reproducing the bug. Every file you open should be justified by the reproduction output or stack trace.
 - Do not modify test files unless the prompt explicitly says to.
