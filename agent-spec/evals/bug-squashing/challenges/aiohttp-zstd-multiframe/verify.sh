@@ -1,7 +1,8 @@
 #!/bin/bash
-# Ensure venv and install
+# Ensure venv and install (skip C extensions — need Cython to build from source)
 [ -d .venv ] || python3 -m venv .venv
-.venv/bin/pip install -e . --quiet 2>/dev/null
+AIOHTTP_NO_EXTENSIONS=1 .venv/bin/pip install -e . --quiet 2>/dev/null
+.venv/bin/pip install pytest trustme pytest-asyncio --quiet 2>/dev/null
 
 # Run tests (override addopts to avoid xdist dependency)
 .venv/bin/python3 -m pytest tests/test_compression_utils.py -x -q -o 'addopts=' 2>&1

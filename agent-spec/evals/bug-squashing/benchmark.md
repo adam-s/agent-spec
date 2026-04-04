@@ -1,6 +1,6 @@
 # Bug-Squashing Benchmark
 
-9 real bugs from open-source Python repos, all fixed after May 2025 (post training cutoff). Each has a known fix commit and test suite.
+12 real bugs from open-source Python repos, all fixed after May 2025 (post training cutoff). Each has a known fix commit and test suite.
 
 ## Level Mapping
 
@@ -88,11 +88,47 @@ The reviewer agent sees these bugs and their fixes during instruction tuning.
 | Bug type | ORM/compiler (UPDATE resolves wrong columns from multi-entity statement) |
 | Complexity | High — multi-layer fix spanning ORM, SQL compiler, and selectable abstraction |
 
+### 7. celery-request-timelimit
+
+| Field | Value |
+|-------|-------|
+| Repo | celery/celery |
+| Issue | #10022 |
+| PR | #10206 |
+| Fix commit | `1fe2a08d0c71ec83a242e1032d48fb804f92337a` |
+| Files | `celery/app/task.py` |
+| Bug type | Config propagation (3 independent bugs: from_config tuple, Context.update, apply()) |
+| Complexity | High — three separate root causes in one file, full task lifecycle understanding |
+
+### 8. click-flag-envvar
+
+| Field | Value |
+|-------|-------|
+| Repo | pallets/click |
+| Issue | #2952 |
+| PR | #2956 |
+| Fix commit | `9caedb9206103dfb5465e1916bc2f13b9c10c0e4` |
+| Files | `src/click/core.py`, `src/click/types.py` |
+| Bug type | State machine (flag option reconciliation of default, flag_value, type, envvar) |
+| Complexity | High — multi-file fix, "absence of value mixed up with value of absence" |
+
+### 9. pytest-duplicate-parametrize
+
+| Field | Value |
+|-------|-------|
+| Repo | pytest-dev/pytest |
+| Issue | #13974 |
+| PR | #13976 |
+| Fix commit | `6b6502e94b78b41951b70265a84187a419e8ce8c` |
+| Files | `src/_pytest/fixtures.py`, `src/_pytest/python.py` |
+| Bug type | Abstraction (indirect parameter handling only checked bool, not list) |
+| Complexity | Medium — multi-file refactor, shared function extraction |
+
 ## Held-Out Set (3 bugs)
 
 The reviewer agent NEVER sees these. Used only to validate that instruction improvements generalize.
 
-### 7. textual-selection-disappearing
+### 10. textual-selection-disappearing
 
 | Field | Value |
 |-------|-------|
@@ -104,7 +140,7 @@ The reviewer agent NEVER sees these. Used only to validate that instruction impr
 | Bug type | UI state (selection disappears on interaction) |
 | Complexity | Medium — state management fix |
 
-### 8. aiohttp-zstd-multiframe
+### 11. aiohttp-zstd-multiframe
 
 | Field | Value |
 |-------|-------|
@@ -116,7 +152,7 @@ The reviewer agent NEVER sees these. Used only to validate that instruction impr
 | Bug type | Streaming (zstd decompression fails on multi-frame responses) |
 | Complexity | Medium — compression pipeline fix |
 
-### 9. httpcore-keepalive
+### 12. httpcore-keepalive
 
 | Field | Value |
 |-------|-------|
@@ -133,8 +169,10 @@ The reviewer agent NEVER sees these. Used only to validate that instruction impr
 | Type | Count | Examples |
 |------|-------|---------|
 | Logic/boundary | 3 | infinite loop, month threshold, selection state |
+| Config/state machine | 2 | celery time limits, click flag envvar reconciliation |
 | Validation | 2 | email IDN, unreachable warning |
 | Protocol/format | 2 | chunked upload, bearer whitespace |
+| Abstraction | 1 | pytest indirect parametrize (bool vs list) |
 | Streaming/data | 1 | zstd multi-frame |
 | ORM/compiler | 1 | wrong column resolution in multi-entity UPDATE |
 

@@ -5,6 +5,18 @@ Deterministic rubric for diagnosing whether a `.claude/` directory uses the righ
 ## The Tree
 
 ```
+0. Does this belong in the .claude/ product at all?
+   │
+   │  Test: Would this constraint still be correct if this .claude/ were
+   │  dropped into a completely different repo and task?
+   │
+   ├── NO → It's environment-specific, not product-level.
+   │   │    Put it in the eval prompt, cordyceps, workspace setup,
+   │   │    or the orchestrator — not in the .claude/ directory.
+   │   └── ENVIRONMENT (not a .claude/ component)
+   │
+   └── YES → Continue to question 1.
+
 1. Is it mechanical — same answer every time, no judgment needed?
    │
    ├── YES → Is it blocking a dangerous action or enforcing a constraint?
@@ -32,10 +44,11 @@ Deterministic rubric for diagnosing whether a `.claude/` directory uses the righ
        │   ├── YES, and it's core identity / project-wide
        │   │   └── CLAUDE.md (under 200 lines)
        │   │
-       │   ├── YES, but only for certain file types
+       │   ├── YES, but only for certain file types or paths
        │   │   └── RULE with paths: frontmatter
        │   │
-       │   └── YES, it's a behavioral constraint (always relevant)
+       │   └── YES, it's a behavioral constraint or separable concern
+       │       │   (always relevant, but not core identity)
        │       └── RULE without paths: (unconditional)
        │
        ├── SOMETIMES → Is it large or detailed?
@@ -67,6 +80,14 @@ Deterministic rubric for diagnosing whether a `.claude/` directory uses the righ
 
 Each rule below is a testable assertion. If the condition is true and the content is in the wrong component, it's a misplacement.
 
+### Context-dependent → must NOT be in .claude/
+
+| ID | Condition | Correct location | Common misplacement |
+| -- | --------- | ---------------- | ------------------- |
+| E1 | Constraint only applies during testing, not in production use | Eval prompt, cordyceps, or workspace setup | permissions.deny in settings.json |
+| E2 | Restriction would break the product in a different repo or task | Environment (orchestrator-level) | Rule or CLAUDE.md |
+| E3 | "Don't use tool X" but the tool is valuable in other contexts | Eval prompt or cordyceps (e.g., shallow clone) | permissions.deny |
+
 ### Mechanical → must be Hook or Permission
 
 | ID | Condition | Correct component | Common misplacement |
@@ -87,7 +108,7 @@ Each rule below is a testable assertion. If the condition is true and the conten
 | G1 | Build/test/lint commands | CLAUDE.md | Nowhere (agent guesses) |
 | G2 | Project architecture, stack description | CLAUDE.md | rule (wastes a file) |
 | G3 | File-type-specific conventions | Rule with `paths:` | CLAUDE.md (loaded every session) |
-| G4 | Behavioral constraint (e.g., "named exports only") | Rule without `paths:` | CLAUDE.md (bloats it) |
+| G4 | Behavioral constraint or separable concern (e.g., "named exports only", escalation strategies) | Rule without `paths:` | CLAUDE.md (bloats it, tangles concerns) |
 | G5 | Instruction that only applies to one subdirectory | Rule with `paths:` | Global rule or CLAUDE.md |
 | G6 | Content over 200 lines in CLAUDE.md | Split into rules | Single bloated CLAUDE.md |
 
