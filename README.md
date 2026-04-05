@@ -1,77 +1,51 @@
 # agent-spec
 
-Test harness for `.claude/` directories. agent-spec takes any project, sandboxes it, runs agents against it, and uses the signal to iteratively improve the project's `.claude/` — until autonomous agents succeed without human intervention.
+Test harness for `.claude/` directories. Sandboxes projects, runs agents, scores results, and iteratively improves instructions until agents succeed without human intervention.
 
-## Three Testing Layers
+## Requirements
 
-1. **Output testing** — Did the agent produce correct results? Sandbox → run → verify → pass/fail.
-2. **Config testing** — Is the `.claude/` well-designed? Score against the component decision tree.
-3. **Behavior testing** — Did the agent make good decisions? Analyze event traces for tool choices and efficiency.
-
-## Recursive Architecture
-
-- **Level 0 (Orchestrator):** Human + agent-spec. Launches agents, scores, diagnoses, fixes instructions.
-- **Level 1 (Sub-agents):** Disposable Claude instances in sandboxes. Their behavior is the signal.
-- **Level 2 (The Product):** The `.claude/` directory. Must be self-sufficient — no knowledge of agent-spec.
+- [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code)
+- Python 3.12+
+- Node.js 18+ (for JavaScript challenges)
+- `ANTHROPIC_API_KEY` environment variable set
 
 ## Quick Start
 
 ```bash
-cd agent-spec/agent-spec
+git clone <repo> && cd agent-spec
+git submodule update --init
+cd agent-spec
 
-# Run an evaluation
-python3 scripts/cli.py run csv-reporter
+# List available evals and configs
+python3 scripts/cli.py list
 
-# Run 3 times to check consistency
-python3 scripts/cli.py run csv-reporter --parallel --instances 3
+# Run the token-efficiency eval (compares 3 CLAUDE.md strategies)
+python3 scripts/cli.py run token-efficiency A-baseline
+python3 scripts/cli.py run token-efficiency B-drona23
+python3 scripts/cli.py run token-efficiency C-caveman
 
-# A/B test two instruction sets
-python3 scripts/cli.py run csv-reporter --parallel --configs baseline,experimental
+# Generate a results summary
+python3 scripts/summarize.py token-efficiency --filter-eval
+```
 
-# View results
-python3 scripts/cli.py report --all
+See [evals/token-efficiency/](agent-spec/evals/token-efficiency/) for a complete worked example with walkthrough.
+
+## Structure
+
+```text
+agent-spec/
+├── agent-spec/        # The harness (orchestrator, evals, scripts)
+├── products/          # .claude/ configs being developed
+├── targets/           # Test subject apps for evals
+└── submodules/        # Third-party repos (git submodule)
 ```
 
 ## How It Works
 
-1. **Copies** your project to a disposable sandbox
-2. **Swaps** `.claude/` with the config variant under test
-3. **Deletes** key files so the agent must produce them (cordyceps injection)
-4. **Runs** `claude -p` with your prompt inside the sandbox
-5. **Scores** the result with a deterministic `verify.sh` script
-6. **Reports** PASS/FAIL with cost and token metrics
-
-The agent never touches your real code.
-
-## Key Concepts
-
-| Concept | Description |
-| ------- | ----------- |
-| **Eval** | Defined by EVAL.md — frontmatter (config) + body (task prompt) |
-| **Config** | A `.claude/` directory variant to test |
-| **Workspace** | Disposable directory — built from a source repo, seed files, or both |
-| **Cordyceps** | Modifying the workspace before the agent sees it |
-| **Baseline** | Stored result from a known-good run — the control measurement |
-| **Verify script** | `verify.sh` that outputs `RESULT: PASS` or `RESULT: FAIL` |
-
-## Project Structure
+An eval defines **challenges** (coding tasks with deterministic tests) and **configs** (`.claude/` directory variants). The harness runs every config against every challenge in isolated sandboxes, measures tokens and cost, and reports the results.
 
 ```text
-agent-spec/                    # Repository root
-├── agent-spec/                # The harness (this is the product)
-│   ├── scripts/               # Core harness scripts
-│   ├── evals/                 # Evaluation definitions (EVAL.md + verify.sh + configs)
-│   └── .claude/               # agent-spec's own instructions
-│       ├── rules/             # Always-loaded behavioral rules
-│       ├── skills/            # On-demand procedures (/iterate, /run-eval, etc.)
-│       ├── reference/         # Deep docs including component design framework
-│       └── hooks/             # Mechanical enforcement scripts
-├── csv-reporter/              # Source project: test fixture
-├── hono-websocket-counter/    # Source project: test fixture
-└── sqlite-window-queries/     # Source project: test fixture
+challenges x configs = runs
 ```
 
-## Requirements
-
-- [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) installed and authenticated
-- Python 3.12+
+Each run: sandbox the project, inject the config's `.claude/`, give the agent the prompt, let it work, run `verify.sh`. The agent doesn't decide if it's done -- the test decides. The primary metric is **tokens-to-correctness**: not just pass/fail, but how many tokens it took to get there.

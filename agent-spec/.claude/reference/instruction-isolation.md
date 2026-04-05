@@ -40,7 +40,7 @@ A sub-agent launched via `invoke.py` runs in `/tmp/claude/agent-spec-{uuid}/` wi
 | User-level config affects results | Minimal user-level rules; no debugging advice in ~/.claude/CLAUDE.md | This doc |
 | Memory accumulates across runs | Sandbox paths are unique; no project memory persists | Claude memory scoping (path-keyed) |
 | Config tested is not config deployed | Config snapshot saved per run in `results/{run_id}/config-snapshot/` | [eval-definition.md](eval-definition.md) |
-| Prompt contains fix hints | Real issue text, no synthetic rewrites; reviewer hints only in `prompt-hinted.md` | CLAUDE.md (real source material rule) |
+| Prompt contains fix hints | Real issue text, no synthetic rewrites | CLAUDE.md (real source material rule) |
 
 ## Why Not Give Sub-agents Memory?
 

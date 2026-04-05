@@ -16,7 +16,19 @@ from lib import PROJECT_DIR, RUN_ROOT, list_evals, list_configs, load_events, ge
 
 def cmd_run(args):
     """Run an evaluation (single or parallel)."""
-    if args.parallel or args.configs or args.models or args.instances > 1:
+    # run_eval.py expects args.eval; cli.py names the positional arg 'target'
+    args.eval = args.target
+    # Supply defaults for run_eval.py attrs not exposed via cli.py
+    if not hasattr(args, "challenge"):
+        args.challenge = None
+    if not hasattr(args, "prompt_variant"):
+        args.prompt_variant = None
+    if not hasattr(args, "escalate"):
+        args.escalate = False
+    # cli.py --parallel is store_true; run_eval.py expects int (concurrency)
+    if isinstance(args.parallel, bool):
+        args.parallel = args.instances if args.parallel else 1
+    if args.parallel > 1 or args.configs or args.models or args.instances > 1:
         import parallel
         parallel.main(args)
     else:

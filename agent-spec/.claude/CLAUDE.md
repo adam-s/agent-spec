@@ -14,7 +14,7 @@ Three testing layers, each adding signal:
 2. **Config testing** — Is the `.claude/` directory well-designed? Score against the component decision tree (@.claude/reference/components/decision-tree.md).
 3. **Behavior testing** — Did the agent make good decisions? Analyze event traces for tool choices, rule adherence, token efficiency.
 
-The primary metric is **tokens-to-correctness** — not just pass/fail, but how many tokens it took to get there. Token counts are model-independent and comparable across pricing changes. Cost is logged but tokens are the headline.
+The primary metric is **tokens-to-correctness** — not just pass/fail, but how many tokens it took to get there. Tokens = input + output only; never include cache reads (they inflate totals ~100x and make comparisons meaningless). Token counts are model-independent and comparable across pricing changes. Cost is logged but tokens are the headline.
 
 ## Recursive Architecture
 
@@ -42,6 +42,8 @@ The cycle:
 4. Fix at the right level — instruction gap → fix the instruction. Model limit → escalation or hints. Eval defect → fix the eval.
 5. Delete the failed eval artifacts and start fresh — don't patch around failures
 6. Attempt again
+
+**Prefer instructions over code fixes.** When a problem is discovered, the default response should be adding or improving a rule or guideline — not writing specific code to handle the case. The orchestrator and coding agents read instructions and solve problems on the fly. A generalized rule in `.claude/` covers every future instance; a specific code fix covers only the one you've seen. Write the rule, and let the agent write the code when it encounters the problem.
 
 **Generalization guard:** Every instruction improvement must be generalized — never specific to a particular bug, library, or error type. If a finding names the domain, it's overfit. Validate improvements against held-out cases that the improvement process has never seen. See @.claude/reference/iteration/generalization.md.
 

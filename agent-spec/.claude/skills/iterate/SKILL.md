@@ -68,8 +68,7 @@ RECURSE:
      python3 scripts/cleanup.py
 
   2. PREPARE STIMULI (if any)
-     # capture-wireframe.sh has been removed; use external screenshot tools if needed
-     These get injected via --stimuli-dir.
+     Stimuli get injected via --stimuli-dir.
 
   3. LAUNCH
      python3 scripts/parallel.py <target> <config> \

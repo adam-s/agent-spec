@@ -110,6 +110,7 @@ Hooks are mechanical enforcement — deterministic actions that fire at lifecycl
 - Exit 0 silently on no-match, only output JSON when the hook applies
 - Use `$CLAUDE_PROJECT_DIR` for paths, never hardcode absolutes
 - `PostToolUse` cannot undo — the tool already executed
+- Project hooks do not fire for agents launched via `claude -p` with `--dangerously-skip-permissions`. For behaviors that must be enforced in headless mode, use CLAUDE.md instructions instead
 - `PermissionRequest` does not fire in headless mode (`-p`) — use `PreToolUse` instead
 - `PreToolUse` fires before permission-mode checks — a hook `deny` blocks even in `bypassPermissions`. Hooks can tighten restrictions but not loosen them past permission rules
 
