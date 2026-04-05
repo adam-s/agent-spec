@@ -122,7 +122,7 @@ def build_parser():
 
     # ── run ──
     p_run = sub.add_parser("run", help="Run an evaluation")
-    p_run.add_argument("target", help="Eval name (directory in evals/)")
+    p_run.add_argument("target", help="Eval name or path (e.g. 'bug-squashing' or 'intercept/auth-bypass')")
     p_run.add_argument("config", nargs="?", default="baseline", help="Config name (default: baseline)")
     p_run.add_argument("--model", default=None, help="Model override")
     p_run.add_argument("--budget", default=None, help="Budget override (USD)")

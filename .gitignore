@@ -1,13 +1,10 @@
 __pycache__/
 
-# Only track the four existing project folders
-# Ignore anything else at the root level
+# Only track the organized project folders
 /*
 !/agent-spec/
-!/csv-reporter/
-!/bug-squasher/
-!/hono-websocket-counter/
-!/sqlite-window-queries/
+!/products/
+!/targets/
+!/submodules/
 !/README.md
 !/.gitignore
-skills/

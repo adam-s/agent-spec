@@ -1,0 +1,9 @@
+[submodule "submodules/intercept"]
+	path = submodules/intercept
+	url = https://github.com/adam-s/intercept
+[submodule "submodules/alphadidactic"]
+	path = submodules/alphadidactic
+	url = https://github.com/adam-s/alphadidactic
+[submodule "submodules/skills"]
+	path = submodules/skills
+	url = https://github.com/anthropics/skills

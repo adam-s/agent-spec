@@ -348,13 +348,17 @@ def now_ms() -> int:
 # ── Discovery ───────────────────────────────────────────────────
 
 def list_evals() -> list[str]:
-    """Return sorted list of eval names (directories with EVAL.md)."""
+    """Return sorted list of eval names (directories with EVAL.md).
+    Searches recursively — evals can be nested in subfolders.
+    Returns relative paths from evals/ (e.g. 'intercept/auth-bypass')."""
     evals_dir = PROJECT_DIR / "evals"
     if not evals_dir.is_dir():
         return []
     return sorted(
-        d.name for d in evals_dir.iterdir()
-        if d.is_dir() and not d.name.startswith("_") and (d / "EVAL.md").exists()
+        str(eval_md.parent.relative_to(evals_dir))
+        for eval_md in evals_dir.rglob("EVAL.md")
+        if not any(part.startswith("_") for part in eval_md.parent.relative_to(evals_dir).parts)
+        and "results" not in eval_md.parent.relative_to(evals_dir).parts
     )
 
 
@@ -363,7 +367,8 @@ list_targets = list_evals
 
 
 def list_configs(eval_name: str) -> list[str]:
-    """Return sorted list of config names for an eval."""
+    """Return sorted list of config names for an eval.
+    eval_name can be a nested path (e.g. 'intercept/auth-bypass')."""
     evals_dir = PROJECT_DIR / "evals"
     tc = evals_dir / eval_name / "configs"
     if not tc.is_dir():
