@@ -8,8 +8,9 @@ Every common operation has a script or skill. Before writing any bash to build a
 
 | Skill | When to use |
 | ----- | ----------- |
-| `/run-eval <eval> [config]` | Run one agent in a workspace and score it |
+| `/run-eval <eval> [config]` | Run one agent in a workspace, score it, compare to prior run |
 | `/iterate <eval>` | Parallel agents → score → diagnose → fix instructions → recurse |
+| `/compare <run-a> <run-b>` | Sub-agent reads two runs' evidence (events, artifacts, transcript) and writes a markdown comparison |
 | `/report` | View results: latest, by run_id, or full comparison |
 | `/stop` | Halt everything: processes, ports, sandboxes |
 | `/new-eval` | Scaffold a new evaluation |
@@ -37,8 +38,6 @@ Every common operation has a script or skill. Before writing any bash to build a
 | `scripts/report.py --score <run_id>` | Print PASS/FAIL result |
 | `scripts/report.py --tokens <run_id>` | Print token breakdown for a run |
 | `scripts/report.py --tokens --session <session_id>` | Cost rollup across iterate session |
-| `scripts/report.py --baseline save <run_id>` | Save run as baseline for regression detection |
-| `scripts/report.py --baseline check <run_id>` | Compare run against saved baseline |
 | `scripts/system_monitor.py` | One-shot system resource status |
 | `scripts/cleanup.py` | Full state reset (ports, sandboxes, PIDs) |
 
@@ -73,21 +72,18 @@ Test a skill by having the agent do what the skill teaches, then running the art
 
 1. Copy skill into config: `cp -R submodules/skills/skills/<name> evals/skill-<name>/configs/with-skill/skills/<name>`
 2. Run: `/run-eval skill-<name> with-skill` — expect PASS
-3. Save baselines (handled by `rules/eval-workflow.md`)
-4. **Break the skill deliberately** — remove guidance verify.sh depends on
-5. Re-run: `/run-eval skill-<name> with-skill`
-6. Check regression: `python3 scripts/report.py --baseline check <new-run-id>` — at least one challenge must report PASS→FAIL
-7. Restore the original skill from `submodules/skills/`
+3. **Break the skill deliberately** — remove guidance verify.sh depends on
+4. Re-run: `/run-eval skill-<name> with-skill` — expect FAIL on at least one challenge
+5. Restore the original skill from `submodules/skills/`
 
-If step 6 produces no regression, the eval is broken. See `rules/eval-workflow.md`.
+If step 4 produces no FAIL, the eval is broken. See `rules/eval-workflow.md`.
 
 **Ongoing regression testing (after the eval is proven):**
 
 1. Copy updated skill into config
 2. `/run-eval skill-<name> with-skill`
-3. `python3 scripts/report.py --baseline check <new-run-id>`
 
-Regressions: PASS→FAIL or token increase >50%.
+`/run-eval` automatically calls `/compare` against the most recent prior run for the same target/config and prints the comparison. Read the comparison to see what changed. A real regression is identified by `/compare`, not by metric thresholds.
 
 ### After any failure or stuck state
 

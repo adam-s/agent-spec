@@ -16,8 +16,6 @@ from pathlib import Path
 PORT_MIN = 3100
 PORT_MAX = 3110
 TIMEOUT_DEFAULT = 600
-REGRESSION_COST_THRESHOLD = 50   # percent
-REGRESSION_TOKEN_THRESHOLD = 50  # percent
 
 SANDBOX_ROOT = Path("/tmp/claude/agent-spec")
 RUN_ROOT = Path("/tmp/agent-spec")

@@ -6,7 +6,7 @@ argument-hint: <eval> [config] [--model MODEL] [--challenge NAME] [--prompt-vari
 
 # /run-eval — Run an evaluation
 
-Run a Claude agent in a workspace, then score the result.
+Run a Claude agent in a workspace, score the result, then compare against the most recent prior run.
 
 ## Before Starting
 
@@ -36,12 +36,24 @@ Do NOT launch until the user confirms.
 python3 scripts/run_eval.py <eval> <config> [--model MODEL] [--budget USD] [--challenge NAME] [--prompt-variant VARIANT] [--keep]
 ```
 
-`run_eval.py` handles everything: EVAL.md parsing, config resolution, challenge iteration, prompt templating, and invoke.py delegation.
+`run_eval.py` handles everything: EVAL.md parsing, config resolution, challenge iteration, prompt templating, and invoke.py delegation. It always runs in stream mode so the agent's transcript is archived to `stream.jsonl` for `/compare` to read.
 
-2. After completion, show results:
+Use `run_in_background: true` for the run command. Monitor with `python3 scripts/dashboard.py --latest`.
+
+2. After the run finishes, show the result:
 
 ```bash
 python3 scripts/dashboard.py --latest --summary
 ```
 
-Use `run_in_background: true` for the run command. Monitor with `python3 scripts/dashboard.py --latest`.
+3. **For each challenge that just ran**, find the most recent prior run for the same target/config (if any) and call `/compare`:
+
+```text
+/compare <prior-run-id> <current-run-id>
+```
+
+To find the prior run id: list `evals/<eval>/results/` sorted by mtime, skip the current run, take the next one whose `events.jsonl` shows the same target and config in `agent_started`. If there is no prior run, skip the comparison and just show the run result.
+
+The `/compare` skill spawns a sub-agent that reads both runs' evidence (events, transcript, produced artifacts) and writes a markdown summary. Print its output below the run summary so the developer sees both in one place.
+
+If the developer ran multiple challenges (matrix eval), call `/compare` once per challenge — each comparison is independent.

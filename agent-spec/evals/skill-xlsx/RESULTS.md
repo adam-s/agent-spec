@@ -24,7 +24,7 @@ It also requires at least 5 formulas as a basic sanity check.
 | `ef54badb` (baseline) | Skill present | PASS | 52 formulas, 55 parens-negative formats, 11 blue fonts |
 | `a92bb114` (regression test) | Skill removed | FAIL | 0 formulas, 0 parens-negative, 0 blue fonts |
 
-`scripts/report.py --baseline check a92bb114` reports `REGRESSION * Result: PASS -> FAIL`.
+The regression was caught by `verify.sh` directly: the second run output `RESULT: FAIL` because the spreadsheet had 0 formulas, no parens-negative format, and no blue font. (The old `--baseline check` command used to print a redundant `REGRESSION` line on top of this — it has since been removed.)
 
 The regression is caught because without the skill, sonnet computes the DCF in Python and writes hardcoded values into the spreadsheet — no formulas, no formatting, no skill conventions.
 

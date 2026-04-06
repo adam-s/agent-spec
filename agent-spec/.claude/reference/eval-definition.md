@@ -26,9 +26,9 @@ A skill eval tests whether a skill produces working output. The skill teaches an
 
 **Prompts:** Describe the task, not the implementation. The prompt says *what* to build. The skill says *how*. If the prompt gives away the answer, the skill is never consulted and regressions can't be detected.
 
-**Regression testing:** Save results as a baseline. After editing the skill, copy the new version into the config and run again. If the output stops working, the skill change caused a regression.
+**Regression testing:** Every run is automatically compared by `/compare` (a sub-agent) against the most recent prior run for the same target/config. The comparing agent reads both runs' events, transcripts, and produced artifacts and writes a short markdown summary of what changed. If you edit the skill and re-run, you immediately see whether the change was an improvement, a regression, or neutral.
 
-**A new skill eval is not done until it has caught a regression.** Build it, run it, save baselines, deliberately break the skill, re-run, confirm at least one challenge reports PASS→FAIL, then restore the original skill. Without that proof the eval is unverified scaffolding — see `rules/eval-workflow.md`.
+**A new skill eval is not done until it has caught a regression.** Build it, run it (PASS), deliberately break the skill, re-run (FAIL), then restore the original. If the broken skill still passes verify.sh, the eval is unverified scaffolding — see `rules/eval-workflow.md`.
 
 ## Directory Layout
 

@@ -93,9 +93,14 @@ RECURSE:
        python3 scripts/report.py --compare <id1> <id2>
 
   6. REGRESSION CHECK
-     python3 scripts/report.py --baseline check <run_id>
-     If first iteration, save baseline:
-       python3 scripts/report.py --baseline save <run_id>
+     If this is not the first iteration, compare each new run against
+     the corresponding run from the previous iteration:
+       /compare <prev_iteration_run_id> <this_iteration_run_id>
+
+     The /compare sub-agent reads both runs' events, transcripts, and
+     produced artifacts, and writes a markdown summary of what changed.
+     Read its output to determine whether this iteration improved on
+     the last one or regressed.
 
   7. STOP CONDITION CHECK
      if all instances PASS and no regressions:

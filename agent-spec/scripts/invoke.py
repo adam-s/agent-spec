@@ -157,16 +157,26 @@ def _archive_and_cleanup():
             if claude_dir.exists():
                 shutil.copytree(claude_dir, _results_dir / "config-snapshot", dirs_exist_ok=True)
 
-        # Archive produced files from sandbox
+        # Archive produced files from sandbox.
+        # The /compare skill reads these to compare what the agent actually produced.
+        # Exclude dependency dirs and version control to keep size sane.
+        EXCLUDE_DIRS = {"node_modules", ".venv", "venv", ".git", "__pycache__",
+                        ".claude", ".pytest_cache", ".tox", "dist", "build"}
         if _sandbox and _sandbox.exists():
-            for ext in ("*.py", "*.js", "*.ts"):
-                for f in _sandbox.rglob(ext):
-                    if "node_modules" in f.parts or f.name.startswith("_apc"):
-                        continue
-                    rel = f.relative_to(_sandbox)
-                    dest = _results_dir / "produced" / rel
-                    dest.parent.mkdir(parents=True, exist_ok=True)
+            for f in _sandbox.rglob("*"):
+                if not f.is_file():
+                    continue
+                if any(part in EXCLUDE_DIRS for part in f.parts):
+                    continue
+                if f.name.startswith("_apc") or f.name == ".metadata_never_index":
+                    continue
+                rel = f.relative_to(_sandbox)
+                dest = _results_dir / "produced" / rel
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                try:
                     shutil.copy2(f, dest)
+                except (OSError, shutil.Error):
+                    pass
 
     # Remove sandbox
     if not _keep and _sandbox and _sandbox.exists():

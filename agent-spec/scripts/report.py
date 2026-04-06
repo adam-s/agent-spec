@@ -13,8 +13,6 @@ Usage:
   report.py --score <run_id>               Print PASS/FAIL result
   report.py --tokens <run_id>              Print token metrics for a run
   report.py --tokens --session <id>        Session token rollup by depth
-  report.py --baseline save <run_id>       Save run metrics as baseline
-  report.py --baseline check <run_id>      Compare run against saved baseline
 """
 
 import argparse
@@ -27,7 +25,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from lib import (
-    PROJECT_DIR, RUN_ROOT, REGRESSION_COST_THRESHOLD, REGRESSION_TOKEN_THRESHOLD,
+    PROJECT_DIR, RUN_ROOT,
     load_events, get_event, find_session_runs, require_file, die,
 )
 
@@ -294,126 +292,6 @@ def print_session_report(session_id: str):
         print(f"  Total cost: ${total_cost:.3f}")
 
 
-# ── Baseline (absorbed from save_baseline.py / check_regression.py) ──
-
-def baseline_save(run_id: str):
-    """Save a run's metrics as the baseline for its target/config."""
-    events_file = RUN_ROOT / run_id / "events.jsonl"
-    require_file(events_file, f"No events for run {run_id}")
-    if events_file.stat().st_size == 0:
-        die(f"Events file is empty for run {run_id}")
-
-    events = load_events(events_file)
-    data = {
-        "run_id": run_id,
-        "saved_at": datetime.now(timezone.utc).isoformat(),
-    }
-
-    started = get_event(events, "agent_started")
-    if started:
-        data["target"] = started["data"].get("target", "?")
-        data["config"] = started["data"].get("config", "?")
-        data["model"] = started["data"].get("model", "?")
-
-    token = get_event(events, "token_update")
-    if token:
-        data["tokens"] = token["data"]
-
-    score = get_event(events, "score")
-    if score:
-        data["result"] = score["data"].get("result", "N/A")
-
-    complete = get_event(events, "agent_complete")
-    if complete:
-        data["duration_ms"] = complete["data"].get("duration_ms", 0)
-
-    target = data.get("target", "unknown")
-    config = data.get("config", "unknown")
-    eval_name = started["data"].get("eval", "") if started else ""
-    if eval_name:
-        baselines_dir = PROJECT_DIR / "evals" / eval_name / "results" / "baselines"
-    else:
-        baselines_dir = PROJECT_DIR / "results" / "baselines"
-    baselines_dir.mkdir(parents=True, exist_ok=True)
-
-    outfile = baselines_dir / f"{target}_{config}.json"
-    outfile.write_text(json.dumps(data, indent=2))
-    print(f"Saved baseline: {outfile}")
-    print(f"  Target: {target}  Config: {config}  Result: {data.get('result', '?')}")
-
-
-def baseline_check(run_id: str):
-    """Compare a run against its saved baseline."""
-    events_file = RUN_ROOT / run_id / "events.jsonl"
-    require_file(events_file, f"No events for run {run_id}")
-
-    events = load_events(events_file)
-    started = get_event(events, "agent_started")
-    target = started["data"].get("target", "unknown") if started else "unknown"
-    config = started["data"].get("config", "unknown") if started else "unknown"
-    c_model = started["data"].get("model", "?") if started else "?"
-
-    eval_name = started["data"].get("eval", "") if started else ""
-    if eval_name:
-        baseline_path = PROJECT_DIR / "evals" / eval_name / "results" / "baselines" / f"{target}_{config}.json"
-    else:
-        baseline_path = PROJECT_DIR / "results" / "baselines" / f"{target}_{config}.json"
-    if not baseline_path.exists():
-        print(f"NO BASELINE for {target}/{config} \u2014 run: report.py --baseline save <run_id>")
-        sys.exit(0)
-
-    try:
-        baseline = json.loads(baseline_path.read_text())
-    except (json.JSONDecodeError, ValueError) as e:
-        print(f"CORRUPT BASELINE at {baseline_path}: {e}")
-        sys.exit(1)
-
-    # Model mismatch warning
-    b_model = baseline.get("model", "?")
-    if b_model != "?" and c_model != "?" and b_model != c_model:
-        print(f"  WARNING: Model mismatch \u2014 baseline used {b_model}, current used {c_model}")
-
-    # Staleness warning
-    saved_at = baseline.get("saved_at")
-    if saved_at:
-        print(f"  Baseline saved: {saved_at[:10]}")
-
-    regressions = []
-    cost_thresh = REGRESSION_COST_THRESHOLD / 100
-    token_thresh = REGRESSION_TOKEN_THRESHOLD / 100
-
-    # Result
-    b_result = baseline.get("result", "N/A")
-    score = get_event(events, "score")
-    c_result = score["data"].get("result", "N/A") if score else "N/A"
-    if b_result == "PASS" and c_result != "PASS":
-        regressions.append(f"Result: {b_result} -> {c_result}")
-
-    # Cost
-    token = get_event(events, "token_update")
-    b_cost = baseline.get("tokens", {}).get("cost_usd", 0)
-    c_cost = token["data"].get("cost_usd", 0) if token else 0
-    if b_cost > 0 and c_cost > b_cost * (1 + cost_thresh):
-        regressions.append(f"Cost: ${b_cost:.3f} -> ${c_cost:.3f} (+{(c_cost/b_cost - 1)*100:.0f}%)")
-
-    # Tokens
-    b_tokens = baseline.get("tokens", {}).get("input", 0) + baseline.get("tokens", {}).get("output", 0)
-    c_tokens = (token["data"].get("input", 0) + token["data"].get("output", 0)) if token else 0
-    if b_tokens > 0 and c_tokens > b_tokens * (1 + token_thresh):
-        regressions.append(f"Tokens: {b_tokens} -> {c_tokens} (+{(c_tokens/b_tokens - 1)*100:.0f}%)")
-
-    print(f"  Baseline: {target}/{config} (run {baseline.get('run_id', '?')})")
-    print(f"  Current:  {target}/{config} (run {run_id})")
-
-    if regressions:
-        print("\nREGRESSION")
-        for r in regressions:
-            print(f"  * {r}")
-        sys.exit(1)
-    else:
-        print("\nOK \u2014 no regression detected")
-
-
 # ── CLI ────────────────────────────────────────────────────────
 
 def main(args=None):
@@ -430,8 +308,6 @@ def main(args=None):
     parser.add_argument("--score", metavar="RUN_ID", help="Print PASS/FAIL result for a run")
     parser.add_argument("--tokens", metavar="RUN_ID", nargs="?", const="__session__",
                         help="Print token metrics (run_id, or with --session for rollup)")
-    parser.add_argument("--baseline", nargs=2, metavar=("ACTION", "RUN_ID"),
-                        help="Baseline operations: save <run_id> or check <run_id>")
     args = args or parser.parse_args()
 
     # Dispatch to specialized modes
@@ -446,17 +322,6 @@ def main(args=None):
             print_tokens_single(args.tokens)
         else:
             print("Usage: --tokens <run_id> or --tokens --session <session_id>", file=sys.stderr)
-            sys.exit(1)
-        return
-
-    if args.baseline:
-        action, run_id = args.baseline
-        if action == "save":
-            baseline_save(run_id)
-        elif action == "check":
-            baseline_check(run_id)
-        else:
-            print(f"Unknown baseline action: {action}. Use 'save' or 'check'.", file=sys.stderr)
             sys.exit(1)
         return
 

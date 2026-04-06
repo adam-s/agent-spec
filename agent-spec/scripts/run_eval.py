@@ -93,8 +93,9 @@ def run_single(eval_dir, config_dir, cfg, args, challenge_name=None, challenge_d
         invoke_args.append("--keep")
     if args.port is not None:
         invoke_args += ["--port", str(args.port)]
-    if getattr(args, "stream", False):
-        invoke_args.append("--stream")
+    # Always use stream mode so the agent's transcript is captured to
+    # results/<run_id>/stream.jsonl. The /compare skill reads it.
+    invoke_args.append("--stream")
 
     result = subprocess.run(invoke_args, capture_output=False)
 

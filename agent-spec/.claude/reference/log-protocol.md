@@ -133,8 +133,6 @@ jq 'select(.event=="debug:verify")' /tmp/agent-spec/<run_id>/events.jsonl
 - Compare: `python3 scripts/report.py --compare <run_id> <run_id>`
 - Session report: `python3 scripts/report.py --session <session_id>`
 - Full report: `python3 scripts/report.py --all`
-- Baseline save: `python3 scripts/report.py --baseline save <run_id>`
-- Baseline check: `python3 scripts/report.py --baseline check <run_id>`
 - Config diff: `python3 scripts/dashboard.py --diff <run_id1> <run_id2>`
 - Parallel status: `python3 scripts/dashboard.py --parallel <parallel_run_id>`
 - Resources: `python3 scripts/system_monitor.py`
