@@ -1,0 +1,1 @@
+Create the requested Word document. Both Node and Python are available. The `docx` Node package is installed locally in `node_modules/`, and a Python venv with `python-docx` is at `.venv/`. Use whichever you prefer. After writing the code, run it to generate the .docx file. Verify the file was created successfully.
