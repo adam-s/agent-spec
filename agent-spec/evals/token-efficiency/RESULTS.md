@@ -2,64 +2,57 @@
 
 > Do .claude/ instruction strategies affect tokens-to-correctness?
 
-Model: `claude-sonnet-4-6` | Runs: 110 | Generated: 2026-04-05T22:43:45Z
+Model: `claude-sonnet-4-6` | Runs: 105 | Generated: 2026-04-06T01:17:25Z
 
 ## Config Comparison
 
 | Config | Runs | Pass Rate | Avg Tokens | Std Dev | Min | Max | Avg Cost | Avg Time | vs Baseline |
 |--------|-----:|----------:|-----------:|--------:|----:|----:|---------:|---------:|------------:|
-| A-baseline | 15 | 80% | 1339 | 654 | 0 | 2549 | $0.080 | 29s | baseline |
-| B-token-efficient | 15 | 100% | 1443 | 666 | 877 | 3212 | $0.087 | 34s | +8% |
-| C-structured | 15 | 93% | 1895 | 1226 | 953 | 4733 | $0.105 | 36s | +42% |
-| D-workflow | 15 | 93% | 2265 | 1076 | 1327 | 5426 | $0.111 | 43s | +69% |
-| E-hybrid | 15 | 93% | 1418 | 687 | 878 | 3579 | $0.085 | 30s | +6% |
-| F-drona23 | 15 | 93% | 1378 | 599 | 881 | 2812 | $0.094 | 29s | +3% |
+| A-baseline | 15 | 100% | 1404 | 540 | 890 | 2425 | $0.087 | 30s | baseline |
+| B-token-efficient | 15 | 100% | 1197 | 350 | 875 | 1826 | $0.080 | 27s | -15% |
+| C-structured | 15 | 100% | 1271 | 344 | 944 | 1822 | $0.084 | 31s | -10% |
+| D-workflow | 15 | 100% | 1983 | 696 | 1177 | 3352 | $0.105 | 43s | +41% |
+| E-hybrid | 15 | 100% | 1438 | 656 | 940 | 3217 | $0.094 | 31s | +2% |
+| F-drona23 | 15 | 100% | 1391 | 594 | 893 | 2870 | $0.086 | 30s | -1% |
+| G-caveman | 15 | 100% | 1252 | 418 | 880 | 2384 | $0.083 | 28s | -11% |
 
 ## Token Breakdown
 
 | Config | Avg Input | Avg Output | Avg Turns | Cost/Turn |
 |--------|----------:|-----------:|----------:|----------:|
-| A-baseline | 6 | 1332 | 6.2 | $0.0129 |
-| B-token-efficient | 74 | 1369 | 6.5 | $0.0135 |
-| C-structured | 178 | 1717 | 7.5 | $0.0141 |
-| D-workflow | 8 | 2257 | 8.1 | $0.0137 |
-| E-hybrid | 6 | 1411 | 6.1 | $0.0139 |
-| F-drona23 | 74 | 1304 | 6.6 | $0.0143 |
+| A-baseline | 7 | 1398 | 6.4 | $0.0135 |
+| B-token-efficient | 7 | 1191 | 6.2 | $0.0129 |
+| C-structured | 6 | 1265 | 6.1 | $0.0138 |
+| D-workflow | 20 | 1962 | 7.5 | $0.0141 |
+| E-hybrid | 7 | 1431 | 6.5 | $0.0145 |
+| F-drona23 | 73 | 1317 | 6.1 | $0.0142 |
+| G-caveman | 7 | 1246 | 6.5 | $0.0129 |
 
 ## Per-Challenge Breakdown
 
 | Challenge | Config | Runs | Pass | Avg Tokens | Std Dev | Avg Cost |
 |-----------|--------|-----:|-----:|-----------:|--------:|---------:|
-| csv-reporter | A-baseline | 5 | 5/5 | 1083 | 17 | $0.073 |
-| csv-reporter | B-token-efficient | 5 | 5/5 | 1105 | 44 | $0.077 |
-| csv-reporter | C-structured | 5 | 5/5 | 1226 | 216 | $0.078 |
-| csv-reporter | D-workflow | 5 | 5/5 | 1896 | 600 | $0.096 |
-| csv-reporter | E-hybrid | 5 | 5/5 | 1093 | 49 | $0.074 |
-| csv-reporter | F-drona23 | 5 | 5/5 | 1094 | 38 | $0.086 |
-| hono-websocket-counter | A-baseline | 5 | 3/5 | 2100 | 318 | $0.102 |
-| hono-websocket-counter | B-token-efficient | 5 | 5/5 | 2120 | 703 | $0.106 |
-| hono-websocket-counter | C-structured | 5 | 4/5 | 2670 | 1715 | $0.134 |
-| hono-websocket-counter | D-workflow | 5 | 4/5 | 3038 | 1542 | $0.138 |
-| hono-websocket-counter | E-hybrid | 5 | 4/5 | 2039 | 898 | $0.094 |
-| hono-websocket-counter | F-drona23 | 5 | 4/5 | 1856 | 646 | $0.100 |
-| sqlite-window-queries | A-baseline | 5 | 4/5 | 833 | 520 | $0.066 |
-| sqlite-window-queries | B-token-efficient | 5 | 5/5 | 1104 | 446 | $0.079 |
-| sqlite-window-queries | C-structured | 5 | 5/5 | 1790 | 974 | $0.104 |
-| sqlite-window-queries | D-workflow | 5 | 5/5 | 1861 | 447 | $0.099 |
-| sqlite-window-queries | E-hybrid | 5 | 5/5 | 1121 | 345 | $0.088 |
-| sqlite-window-queries | F-drona23 | 5 | 5/5 | 1183 | 636 | $0.097 |
-
-## Failures
-
-| Run ID | Config | Challenge | Result | Tokens | Time |
-|--------|--------|-----------|--------|-------:|-----:|
-| 09d90861 | A-baseline | hono-websocket-counter | FAIL | 2549 | 62s |
-| 55894157 | A-baseline | hono-websocket-counter | FAIL | 1748 | 32s |
-| 10d90ea9 | A-baseline | sqlite-window-queries | FAIL | 0 | — |
-| 993e3281 | C-structured | hono-websocket-counter | FAIL | 2053 | 40s |
-| f3cdfa30 | D-workflow | hono-websocket-counter | FAIL | 2504 | 62s |
-| af8f75f4 | E-hybrid | hono-websocket-counter | FAIL | 1952 | 32s |
-| 3fef452b | F-drona23 | hono-websocket-counter | FAIL | 2812 | 54s |
+| csv-reporter | A-baseline | 5 | 5/5 | 1092 | 68 | $0.073 |
+| csv-reporter | B-token-efficient | 5 | 5/5 | 1099 | 25 | $0.076 |
+| csv-reporter | C-structured | 5 | 5/5 | 1129 | 46 | $0.075 |
+| csv-reporter | D-workflow | 5 | 5/5 | 1606 | 407 | $0.091 |
+| csv-reporter | E-hybrid | 5 | 5/5 | 1056 | 39 | $0.079 |
+| csv-reporter | F-drona23 | 5 | 5/5 | 1085 | 61 | $0.080 |
+| csv-reporter | G-caveman | 5 | 5/5 | 1095 | 71 | $0.075 |
+| hono-websocket-counter | A-baseline | 5 | 5/5 | 2065 | 416 | $0.100 |
+| hono-websocket-counter | B-token-efficient | 5 | 5/5 | 1613 | 273 | $0.082 |
+| hono-websocket-counter | C-structured | 5 | 5/5 | 1714 | 167 | $0.090 |
+| hono-websocket-counter | D-workflow | 5 | 5/5 | 2518 | 808 | $0.112 |
+| hono-websocket-counter | E-hybrid | 5 | 5/5 | 2113 | 769 | $0.112 |
+| hono-websocket-counter | F-drona23 | 5 | 5/5 | 1974 | 625 | $0.096 |
+| hono-websocket-counter | G-caveman | 5 | 5/5 | 1709 | 443 | $0.093 |
+| sqlite-window-queries | A-baseline | 5 | 5/5 | 1056 | 151 | $0.086 |
+| sqlite-window-queries | B-token-efficient | 5 | 5/5 | 880 | 3 | $0.083 |
+| sqlite-window-queries | C-structured | 5 | 5/5 | 970 | 30 | $0.087 |
+| sqlite-window-queries | D-workflow | 5 | 5/5 | 1824 | 557 | $0.113 |
+| sqlite-window-queries | E-hybrid | 5 | 5/5 | 1145 | 236 | $0.089 |
+| sqlite-window-queries | F-drona23 | 5 | 5/5 | 1113 | 448 | $0.083 |
+| sqlite-window-queries | G-caveman | 5 | 5/5 | 953 | 74 | $0.081 |
 
 ## How to Read This
 

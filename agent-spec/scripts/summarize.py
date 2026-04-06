@@ -68,8 +68,9 @@ def load_eval_runs(eval_name, filter_eval=False):
             if d.is_dir() and (d / "events.jsonl").exists():
                 process_run(d.name, d / "events.jsonl")
 
-    # Live results in /tmp
-    if RUN_ROOT.exists():
+    # Live results in /tmp — only check if no archived results found
+    # (archived results are the canonical source; /tmp has stale leftovers)
+    if not runs and RUN_ROOT.exists():
         for d in RUN_ROOT.iterdir():
             if d.is_dir() and (d / "events.jsonl").exists():
                 process_run(d.name, d / "events.jsonl")
@@ -202,6 +203,27 @@ def build_summary(eval_name, runs):
                 "avg_cost": sum(costs) / n,
             })
 
+    # Collect individual failures
+    failures = []
+    for r in runs:
+        if r.get("result") not in ("PASS",):
+            reason = ""
+            for e in r.get("events", []):
+                if e["event"] == "verification_output":
+                    output = e["data"].get("output", "")
+                    # Extract a short reason from verification output
+                    for line in output.splitlines():
+                        if "Error:" in line or "FAIL" in line:
+                            reason = line.strip()[:120]
+                            break
+            failures.append({
+                "run_id": r["run_id"],
+                "config": r.get("config", "?"),
+                "challenge": r.get("target", "?"),
+                "result": r.get("result", "N/A"),
+                "reason": reason,
+            })
+
     return {
         "eval_name": eval_name,
         "description": description,
@@ -212,6 +234,7 @@ def build_summary(eval_name, runs):
         "total_runs": len(runs),
         "config_stats": config_stats,
         "challenge_stats": challenge_stats,
+        "failures": failures,
     }
 
 
@@ -251,6 +274,18 @@ def format_terminal(summary):
         )
 
     lines.append("")
+
+    # Individual failures
+    failures = summary.get("failures", [])
+    if failures:
+        lines.append(f"  Failures ({len(failures)})")
+        lines.append(f"  {'Run ID':<10} {'Config':<16} {'Challenge':<26} {'Reason'}")
+        lines.append(f"  {'─'*10} {'─'*16} {'─'*26} {'─'*40}")
+        for f in failures:
+            lines.append(
+                f"  {f['run_id'][:8]:<10} {f['config']:<16} {f['challenge']:<26} {f['reason'][:60]}"
+            )
+        lines.append("")
 
     return "\n".join(lines)
 
@@ -301,6 +336,16 @@ def format_markdown(summary):
             f"{cs['passes']}/{cs['runs']} | {cs['avg_tokens']:.0f} | "
             f"{cs['std_tokens']:.0f} | ${cs['avg_cost']:.3f} |"
         )
+
+    # Individual failures
+    failures = summary.get("failures", [])
+    if failures:
+        lines.append(f"\n## Failures ({len(failures)})\n")
+        lines.append("| Run ID | Config | Challenge | Reason |")
+        lines.append("|--------|--------|-----------|--------|")
+        for f in failures:
+            reason = f['reason'].replace("|", "\\|") if f['reason'] else "—"
+            lines.append(f"| {f['run_id'][:8]} | {f['config']} | {f['challenge']} | {reason} |")
 
     # Interpretation guide
     lines.append("\n## How to Read This\n")

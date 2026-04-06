@@ -26,6 +26,15 @@ A reasoning model with bad instructions still flails. A weaker model with precis
 
 Self-refinement is the closest cousin. agent-spec's `/iterate` skill does external self-refinement — run, score, diagnose, fix instructions, repeat. But it's refining the *prompt environment*, not the model's internal reasoning chain.
 
+## The Two-Chat Workflow
+
+Developing `.claude/` instructions is itself an agent-assisted process, but it works best with two separate chats:
+
+1. **The context chat** — holds the full picture of what you're trying to achieve, reviews experiment results, and evolves the `.claude/` instructions. This chat accumulates understanding over time and writes handoff documents when it's time to test changes.
+2. **The execution chat** — picks up handoffs from the context chat and runs experiments, evals, or coding tasks against the current instructions. Its results flow back to the context chat for diagnosis.
+
+This separation matters because the context chat stays focused on *why* instructions should change, while the execution chat stays disposable — it runs, produces signal, and gets replaced. Mixing both into one chat degrades the context chat's accumulated understanding with execution noise, and makes the execution chat too cautious to be disposable.
+
 ## The Short Version
 
 Those topics ask "how do we make the model smarter?" agent-spec asks "how do we make the context around the model smarter?" Both matter, and they compound.
