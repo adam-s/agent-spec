@@ -65,6 +65,30 @@ Each config is a complete `.claude/` directory placed into the workspace. Every 
 1. `python3 scripts/parallel.py eval baseline --models haiku,sonnet`
 2. `python3 scripts/report.py <ids> --group-by model`
 
+### Skill regression testing
+
+Test a skill by having the agent do what the skill teaches, then running the artifact it produces. If the skill teaches API code, run the code. If it teaches spreadsheet generation, open the spreadsheet. verify.sh executes the output and checks the result — never pattern matches source text.
+
+**Building a new skill eval — the full cycle (do not stop early):**
+
+1. Copy skill into config: `cp -R submodules/skills/skills/<name> evals/skill-<name>/configs/with-skill/skills/<name>`
+2. Run: `/run-eval skill-<name> with-skill` — expect PASS
+3. Save baselines (handled by `rules/eval-workflow.md`)
+4. **Break the skill deliberately** — remove guidance verify.sh depends on
+5. Re-run: `/run-eval skill-<name> with-skill`
+6. Check regression: `python3 scripts/report.py --baseline check <new-run-id>` — at least one challenge must report PASS→FAIL
+7. Restore the original skill from `submodules/skills/`
+
+If step 6 produces no regression, the eval is broken. See `rules/eval-workflow.md`.
+
+**Ongoing regression testing (after the eval is proven):**
+
+1. Copy updated skill into config
+2. `/run-eval skill-<name> with-skill`
+3. `python3 scripts/report.py --baseline check <new-run-id>`
+
+Regressions: PASS→FAIL or token increase >50%.
+
 ### After any failure or stuck state
 
 1. `/stop` — clears everything

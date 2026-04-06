@@ -12,8 +12,23 @@ That's it. Every eval is this cross-product, regardless of what's being tested.
 - A config comparison: 3 challenges × 6 configs = 18 runs
 - An ablation test: 1 challenge × 6 configs (each with a component removed) = 6 runs
 - A model benchmark: 1 challenge × 1 config × 3 models = 3 runs
+- A skill eval: 3 challenges × 1 config (with skill) = 3 runs
 
 The dimensions can grow if we encounter experiments that don't fit. But the structure is always: dimensions × runs = results, stored in one place.
+
+### Skill evals
+
+A skill eval tests whether a skill produces working output. The skill teaches an agent how to do something — the challenge has the agent do that thing, and verify.sh checks if the result actually works.
+
+**The output must run.** If the skill teaches the agent to write API code, the verify script runs the code against the real library. If the skill teaches the agent to generate a spreadsheet, the verify script opens the spreadsheet and checks the formulas. Pattern matching on source text is not verification — the code must execute.
+
+**Configs:** Copy the skill into a config's `skills/` directory. The skill is a snapshot — copy it when you want to test, not a symlink.
+
+**Prompts:** Describe the task, not the implementation. The prompt says *what* to build. The skill says *how*. If the prompt gives away the answer, the skill is never consulted and regressions can't be detected.
+
+**Regression testing:** Save results as a baseline. After editing the skill, copy the new version into the config and run again. If the output stops working, the skill change caused a regression.
+
+**A new skill eval is not done until it has caught a regression.** Build it, run it, save baselines, deliberately break the skill, re-run, confirm at least one challenge reports PASS→FAIL, then restore the original skill. Without that proof the eval is unverified scaffolding — see `rules/eval-workflow.md`.
 
 ## Directory Layout
 
